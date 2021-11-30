@@ -106,6 +106,7 @@ class BeamRuntime(Runtime):
         self,
         dataflow: Dataflow,
         serializer: SerDe = JsonSerializer(),
+        bootstrap_servers="localhost:9092",
         test_mode=False,
         timeout=-1,
     ):
@@ -117,6 +118,7 @@ class BeamRuntime(Runtime):
         self.ingress_router = IngressBeamRouter(
             dataflow.operators, IngressRouter(serializer), self.egress_router
         )
+        self.bootstrap_servers = bootstrap_servers
 
         self.pipeline: beam.Pipeline = None
 
@@ -137,7 +139,7 @@ class BeamRuntime(Runtime):
     def _setup_kafka_client(self) -> KafkaConsume:
         return KafkaConsume(
             consumer_config={
-                "bootstrap.servers": "localhost:9092",
+                "bootstrap.servers": self.bootstrap_servers,
                 "auto.offset.reset": "latest",
                 "group.id": str(uuid.uuid4()),
                 "topic": ["client_request", "internal"],
@@ -148,7 +150,7 @@ class BeamRuntime(Runtime):
 
     def _setup_kafka_producer(self, topic: str) -> kafkaio.KafkaProduce:
         return KafkaProduce(
-            servers="localhost:9092",
+            servers=self.bootstrap_servers,
             topic=topic,
         )
 
