@@ -20,7 +20,7 @@ class Item:
     def set_stock(self, amount: int):
         self.stock = amount
 
-    def __key__(self):
+    def __key__(self) -> str:
         return self.item_name
 
 
@@ -34,7 +34,7 @@ class User:
     def update_balance(self, x: int):
         self.balance += x
 
-    def get_balance(self):
+    def get_balance(self) -> int:
         return self.balance
 
     def buy_item(self, amount: int, item: Item) -> bool:
@@ -52,7 +52,7 @@ class User:
         self.balance -= total_price
         return True
 
-    def simple_for_loop(self, users: List["User"]):
+    def simple_for_loop(self, users: List["User"]) -> int:
         i = 0
         for user in users:
             if i > 0:
@@ -63,7 +63,7 @@ class User:
 
         return i
 
-    def state_requests(self, items: List[Item]):
+    def state_requests(self, items: List[Item]) -> int:
         total: int = 0
         first_item: Item = items[0]
         print(f"Total is now {total}.")
@@ -87,5 +87,5 @@ class User:
         total += first_item.stock  # total = 26
         return total
 
-    def __key__(self):
+    def __key__(self) -> str:
         return self.username
