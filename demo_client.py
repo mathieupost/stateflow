@@ -94,14 +94,14 @@ print(f"Item stock: {item.stock.get()} and price {item.price.get()}")
 print()
 # This is impossible.
 start = datetime.datetime.now()
-print(f"Let's try to buy 100 coke's of 10EU?: {user.buy_item(100, item).get()}")
+print(f"Let's try to buy 100 coke's of 10EU?: {user.buy_item(100, item, user).get()}")
 end = datetime.datetime.now()
 delta = end - start
 print(f"Buy item took {delta.total_seconds() * 1000}ms")
 
 # Jeej we buy one, user will end up with 0 balance and there is 4 left in stock.
 start = datetime.datetime.now()
-print(f"Lets' try to buy 1 coke's of 10EU?: {user.buy_item(1, item).get()}")
+print(f"Lets' try to buy 1 coke's of 10EU?: {user.buy_item(1, item, user).get()}")
 end = datetime.datetime.now()
 delta = end - start
 print(f"Another buy item took {delta.total_seconds() * 1000}ms")

@@ -1,4 +1,3 @@
-import uuid
 from typing import List
 import stateflow
 
@@ -20,6 +19,9 @@ class Item:
     def set_stock(self, amount: int):
         self.stock = amount
 
+    def ping(self, user: "User") -> bool:
+        return user.pong()
+
     def __key__(self) -> str:
         return self.item_name
 
@@ -37,7 +39,8 @@ class User:
     def get_balance(self) -> int:
         return self.balance
 
-    def buy_item(self, amount: int, item: Item) -> bool:
+    def buy_item(self, amount: int, item: Item, user: "User") -> bool:
+        # user and item should be consistent versions
         total_price = amount * item.price
 
         if self.balance < total_price:
@@ -45,6 +48,10 @@ class User:
 
         # Decrease the stock.
         decrease_stock = item.update_stock(-amount)
+
+        # TODO Calling back to same class doesn't work.
+        # user: "User" = self
+        item.ping(user)
 
         if not decrease_stock:
             return False  # For some reason, stock couldn't be decreased.
@@ -86,6 +93,9 @@ class User:
         first_item: Item = first_item
         total += first_item.stock  # total = 26
         return total
+
+    def pong(self) -> bool:
+        return True
 
     def __key__(self) -> str:
         return self.username
