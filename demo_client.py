@@ -13,7 +13,7 @@ client: StateflowClient = StateflowKafkaClient(
     flow, brokers="localhost:9092", statefun_mode=False
 )
 client.create_all_topics()
-client.wait_until_healthy(timeout=10)
+client.wait_until_healthy()
 
 
 print("Creating a user: ")
@@ -43,7 +43,7 @@ print(f"Creating another user took {delta.total_seconds() * 1000}ms")
 
 print("Done!")
 start = datetime.datetime.now()
-for_loop: int = user.simple_for_loop([user, user2]).get(timeout=5)
+for_loop: int = user.simple_for_loop([user, user2]).get()
 end = datetime.datetime.now()
 delta = end - start
 print(f"Simple for loop took {delta.total_seconds() * 1000}ms")
@@ -78,7 +78,7 @@ print(f"Creating another pepsi took {delta.total_seconds() * 1000}ms")
 
 
 start = datetime.datetime.now()
-hi = user.state_requests([item, item2]).get(timeout=10)
+hi = user.state_requests([item, item2]).get()
 print(hi)
 end = datetime.datetime.now()
 delta = end - start
