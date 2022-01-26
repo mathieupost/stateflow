@@ -1,6 +1,6 @@
 from inspect import isclass, getsource, getfile
 import libcst as cst
-from typing import List, Dict
+from typing import List, Dict, Type
 from stateflow.wrappers.class_wrapper import ClassWrapper
 from stateflow.wrappers.meta_wrapper import MetaWrapper
 from stateflow.dataflow.dataflow import Dataflow, Ingress, Egress
@@ -20,7 +20,7 @@ registered_classes: List[ClassWrapper] = []
 meta_classes: List = []
 
 
-def stateflow(cls, parse_file=True):
+def stateflow(cls: Type, parse_file=True) -> Type:
     if not isclass(cls):
         raise AttributeError(f"Expected a class but got an {cls}.")
 
