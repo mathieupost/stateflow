@@ -1,5 +1,6 @@
 from inspect import isclass, getsource, getfile
 import libcst as cst
+import libcst.metadata as meta
 from typing import List, Dict, Type
 from stateflow.wrappers.class_wrapper import ClassWrapper
 from stateflow.wrappers.meta_wrapper import MetaWrapper
@@ -39,8 +40,8 @@ def stateflow(cls: Type, parse_file=True) -> Type:
         class_source = getsource(cls)
         parsed_cls = cst.parse_module(textwrap.dedent(class_source))
 
-    wrapper = cst.metadata.MetadataWrapper(parsed_cls)
-    expression_provider = wrapper.resolve(cst.metadata.ExpressionContextProvider)
+    wrapper = meta.MetadataWrapper(parsed_cls)
+    expression_provider = wrapper.resolve(meta.ExpressionContextProvider)
 
     # Extract class description.
     extraction: ExtractClassDescriptor = ExtractClassDescriptor(
