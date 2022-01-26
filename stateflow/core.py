@@ -89,7 +89,7 @@ def _build_dataflow(
 
         # For all functions we have an incoming ingress and outgoing egress
         ingress: Ingress = Ingress(f"{name}-input", operator, EventType.Request)
-        egress: Egress = Ingress(f"{name}-input", operator, EventType.Request)
+        egress: Egress = Egress(f"{name}-output", operator, EventType.Request)
 
         incoming_edges.append(ingress)
         outgoing_edges.append(egress)
