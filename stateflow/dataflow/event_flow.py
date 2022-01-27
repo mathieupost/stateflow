@@ -585,17 +585,16 @@ class InvokeSplitFun(EventFlowNode):
         self, graph: EventFlowGraph, node_type: str
     ) -> EventFlowNode:
         """Returns the next node which is not equal to a certain type.
-        Assumes there is only 2 next nodes.
 
         :param graph: the graph to obtain the actual nodes.
         :param node_type: the type to not look for.
         :return: the corresponding EventFlowNode.
         """
-        return [
-            graph.get_node_by_id(i)
-            for i in self.next
-            if graph.get_node_by_id(i).typ != node_type
-        ][0]
+        for i in self.next:
+            node = graph.get_node_by_id(i)
+            if node.typ != node_type:
+                return node
+
 
     def _set_definitions(self, return_results: List):
         for i, decl in enumerate(self.definitions):
