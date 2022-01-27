@@ -85,20 +85,22 @@ class StatefulOperator(Operator):
         else:
             raise AttributeError(f"Unknown event type: {event_type}.")
 
-    def handle(self, event: Event, state: Optional[bytes]) -> Tuple[Event, bytes]:
+    def handle(self, event: Event, serialized_state: Optional[bytes]) -> Tuple[Event, bytes]:
         """Handles incoming event and current state.
 
         Depending on the event type, a method is executed or a instance is created, or state is updated, etc.
 
         :param event: the incoming event.
-        :param state: the incoming state (in bytes). If this is None, we assume this 'key' does not exist.
+        :param serialized_state: the incoming state (in bytes). If this is None, we assume this 'key' does not exist.
         :return: a tuple of outgoing event + updated state (in bytes).
         """
-        if event.event_type == EventType.Request.InitClass:
-            return self._handle_create_with_state(event, state)
+        print("event", event.event_id[:8], event.fun_address, event.event_type, event.payload if "flow" not in event.payload else event.payload["flow"])
 
-        if state:  # If state exists, we can deserialize it.
-            state = State(self.serializer.deserialize_dict(state))
+        if event.event_type == EventType.Request.InitClass:
+            return self._handle_create_with_state(event, serialized_state)
+
+        if serialized_state:  # If state exists, we can deserialize it.
+            state = State(self.serializer.deserialize_dict(serialized_state))
         else:  # If state does not exists we can't execute these methods, so we return a KeyNotFound reply.
             return (
                 event.copy(
@@ -107,7 +109,7 @@ class StatefulOperator(Operator):
                         "error_message": f"Stateful instance with key={event.fun_address.key} does not exist."
                     },
                 ),
-                state,
+                serialized_state,
             )
 
         # We dispatch the event to find the correct execution method.
@@ -121,7 +123,7 @@ class StatefulOperator(Operator):
         return return_event, updated_state
 
     def _handle_create_with_state(
-        self, event: Event, state: Optional[State]
+        self, event: Event, state: Optional[bytes]
     ) -> Tuple[Event, bytes]:
         """Will 'create' this instance, by verifying if the state exists already.
 
@@ -133,9 +135,7 @@ class StatefulOperator(Operator):
         :param state: the current state (in bytes), might be None.
         :return: the outgoing event and (updated) state.
         """
-        if (
-            state
-        ):  # In this case, we already created a class before, so we will return an error.
+        if state: # In this case, we already created a class before, so we will return an error.
             return (
                 event.copy(
                     event_type=EventType.Reply.FailedInvocation,
