@@ -39,7 +39,7 @@ class StateDescriptor:
     def get_keys(self):
         return self._state_desc.keys()
 
-    def match(self, state: State) -> State:
+    def match(self, state: State) -> bool:
         return self.get_keys() == state.get_keys()
 
     def __str__(self):
