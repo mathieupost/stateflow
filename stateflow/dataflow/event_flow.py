@@ -1,5 +1,5 @@
 from stateflow.dataflow.address import FunctionAddress
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple, Optional, Union
 from stateflow.dataflow.state import State
 from stateflow.dataflow.args import Arguments
 from stateflow.wrappers.class_wrapper import (
@@ -94,7 +94,7 @@ class EventFlowNode:
     def resolve_next(self, nodes: List["EventFlowNode"], block):
         self.set_next(nodes[0].id)
 
-    def set_next(self, next: List[int]):
+    def set_next(self, next: Union[List[int],int]):
         """Set the next EventFlowNode.
         If there already exist a self.next, the input is extended.
 
@@ -399,7 +399,8 @@ class StartNode(EventFlowNode):
         instance: Any = None,
     ) -> Tuple[EventFlowNode, State, Any]:
         # We assume the start node has only one next node.
-        return graph.get_node_by_id(self.next[0]), state, instance
+        next_node = graph.get_node_by_id(self.next[0])
+        return next_node, state, instance
 
     @staticmethod
     def construct(fun_addr: FunctionAddress, dict: Dict) -> EventFlowNode:
