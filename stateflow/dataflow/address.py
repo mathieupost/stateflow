@@ -16,16 +16,6 @@ class FunctionType:
     def get_full_name(self):
         return f"{self.namespace}/{self.name}"
 
-    def __eq__(self, other):
-        if not isinstance(other, FunctionType):
-            return False
-
-        namespace_eq = self.namespace == other.namespace
-        name_eq = self.name == other.name
-        stateful_eq = self.stateful == other.stateful
-
-        return namespace_eq and name_eq and stateful_eq
-
     def to_dict(self) -> Dict:
         return {
             "namespace": self.namespace,
