@@ -179,7 +179,7 @@ class InputDescriptor:
         return self._input_desc
 
     def match(self, args: Arguments) -> bool:
-        return args.get_keys() == self._input_desc.keys()
+        return args.get_keys() == self.keys()
 
     def __str__(self):
         return str(list(self._input_desc.keys()))

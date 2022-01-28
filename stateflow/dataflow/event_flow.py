@@ -305,7 +305,7 @@ class EventFlowGraph:
     def construct_and_assign_arguments(
         flow: List[EventFlowNode], fun_addr: FunctionAddress, args: Arguments
     ) -> "EventFlowGraph":
-        to_assign: List[str] = list(args.get_keys())
+        to_assign: List[str] = args.get_keys()
         flow_for_params: List[EventFlowNode] = []
 
         # Get the first nodes up and until the first InvokeSplitFun.

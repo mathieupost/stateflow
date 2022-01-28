@@ -6,7 +6,7 @@ class Arguments:
     __slots__ = "_args"
 
     def __init__(self, args: Dict[str, Any]):
-        self._args = args
+        self._args: Dict[str, Any] = args
 
     def __getitem__(self, item):
         return self._args[item]
@@ -18,7 +18,7 @@ class Arguments:
         return self._args
 
     def get_keys(self) -> List[str]:
-        return self._args.keys()
+        return list(self._args.keys())
 
     def to_dict(self) -> Dict:
         return self._args
