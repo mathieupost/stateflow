@@ -44,6 +44,9 @@ class FunctionType:
             and self.stateful == other.stateful
         )
 
+    def __str__(self) -> str:
+        return f"{self.namespace}.{self.name}"
+
 
 class FunctionAddress:
     """The address of a stateful or stateless function.
@@ -83,3 +86,6 @@ class FunctionAddress:
             return False
 
         return self.key == other.key and self.function_type == other.function_type
+
+    def __str__(self) -> str:
+        return f"{self.function_type}({self.key})"

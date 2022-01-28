@@ -235,6 +235,12 @@ class EventFlowNode:
 
         return new_node
 
+    def __str__(self) -> str:
+        res = f"{self.typ}.{self.fun_addr}"
+        if hasattr(self, "fun_name"):
+            res += f".{self.fun_name}"
+        return res
+
 
 class EventFlowGraph:
     __slots__ = "current_node", "graph", "id_to_node"
@@ -365,6 +371,9 @@ class EventFlowGraph:
             )
 
         return EventFlowGraph(current_node, all_nodes)
+    
+    def __str__(self) -> str:
+        return f"{self.current_node}"
 
 
 class StartNode(EventFlowNode):
