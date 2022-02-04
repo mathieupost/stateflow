@@ -1,18 +1,9 @@
-from typing import List, Optional, Dict, Tuple, Any
-from enum import Enum, EnumMeta
+from typing import Optional, Dict
+from enum import Enum
 from stateflow.dataflow.address import FunctionAddress
 
 
-class MetaEnum(EnumMeta):
-    def __contains__(cls, item):
-        try:
-            cls(item)
-        except ValueError:
-            return False
-        return True
-
-
-class _Request(Enum, metaclass=MetaEnum):
+class _Request(Enum):
     InvokeStateless = "InvokeStateless"
     InvokeStateful = "InvokeStateful"
     InitClass = "InitClass"
@@ -32,7 +23,7 @@ class _Request(Enum, metaclass=MetaEnum):
         return f"Request.{self.value}"
 
 
-class _Reply(Enum, metaclass=MetaEnum):
+class _Reply(Enum):
     SuccessfulInvocation = "SuccessfulInvocation"
     SuccessfulCreateClass = "SuccessfulCreateClass"
 
@@ -54,9 +45,9 @@ class EventType:
 
     @staticmethod
     def from_str(input_str: str) -> Optional["EventType"]:
-        if input_str in EventType.Request:
+        if input_str in EventType.Request._member_names_:
             return EventType.Request[input_str]
-        elif input_str in EventType.Reply:
+        elif input_str in EventType.Reply._member_names_:
             return EventType.Reply[input_str]
         else:
             return None
