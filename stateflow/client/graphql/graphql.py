@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple, Any
 
 import graphene
 import time
-from fastapi import FastAPI, Depends, Query
+from fastapi import FastAPI, Depends
 from graphql.execution.executors.asyncio import AsyncioExecutor
 from starlette.graphql import GraphQLApp
 
@@ -22,6 +22,14 @@ from stateflow.dataflow.event_flow import (
 )
 from stateflow.descriptors.method_descriptor import MethodDescriptor
 from stateflow.serialization.pickle_serializer import SerDe, PickleSerializer
+
+
+class Query(graphene.ObjectType):
+    pass
+
+
+class Mutation(graphene.ObjectType):
+    pass
 
 
 class GraphQLClient(StateflowClient):
