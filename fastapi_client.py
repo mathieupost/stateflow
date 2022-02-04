@@ -1,8 +1,7 @@
 import uuid
 
-from stateflow.client.fastapi.kafka import KafkaFastAPIClient, StateflowFailure
-from stateflow.client.fastapi.aws_lambda import AWSLambdaFastAPIClient
-from demo_common import stateflow, User
+from stateflow.client.fastapi.kafka import KafkaFastAPIClient
+from demo_common import stateflow
 
 client = KafkaFastAPIClient(stateflow.init())
 app = client.get_app()
