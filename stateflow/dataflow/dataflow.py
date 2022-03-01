@@ -107,13 +107,13 @@ class EgressRouter:
 
     def route_and_serialize(self, event: Event) -> Route:
         if event.event_type == EventType.Request.EventFlow:
-            return self._route_event_flow(event)
+            route = self._route_event_flow(event)
         elif isinstance(event.event_type, EventType.Reply):
             event_id = event.event_id
             if self.serialize_on_return:
                 event = self.serialize(event)
 
-            return Route(
+            route = Route(
                 RouteDirection.CLIENT,
                 "",
                 event_id,
@@ -123,6 +123,10 @@ class EgressRouter:
             raise AttributeError(
                 f"Unknown event type {event.event_type}.\nFull event: {self.serialize(event)}."
             )
+        
+        if route.direction == RouteDirection.CLIENT:
+            print(f"----------------------------------------")
+        return route
 
 
 class IngressRouter:

@@ -259,6 +259,7 @@ class EventFlowGraph:
         state: State = None,
         instance: Any = None,
     ) -> Tuple[State, Any]:
+        print(f"\tstep: node={self.current_node}, state={state}, instance={instance}")
         next_node, updated_state, instance = self.current_node.step(
             self, class_wrapper, state, instance
         )

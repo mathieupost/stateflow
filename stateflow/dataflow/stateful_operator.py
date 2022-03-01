@@ -117,6 +117,9 @@ class StatefulOperator(Operator):
             event.event_type, event, state
         )
 
+        event = return_event
+        print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload if "flow" not in event.payload else [ f"{event.payload['flow']}", f"{event.payload}" ])
+
         if updated_state is not None:
             return return_event, self.serializer.serialize_dict(updated_state.get())
 
