@@ -40,14 +40,18 @@ class User:
         return self.balance
 
     def buy_item(self, amount: int, item: Item, user: "User") -> bool:
+        print("buy_item")
         # user and item should be consistent versions
         total_price = amount * item.price
+        print(f"total_price = {total_price}")
 
         if self.balance < total_price:
+            print("insufficient balance")
             return False
 
         # Decrease the stock.
         decrease_stock = item.update_stock(-amount)
+        print(f"decrease_stock = {decrease_stock}")
 
         # TODO Calling back to same class doesn't work.
         # user: "User" = self
@@ -57,6 +61,7 @@ class User:
             return False  # For some reason, stock couldn't be decreased.
 
         self.balance -= total_price
+        print(f"balance = {self.balance}")
         return True
 
     def simple_for_loop(self, users: List["User"]) -> int:
@@ -71,27 +76,37 @@ class User:
         return i
 
     def state_requests(self, items: List[Item]) -> int:
+        print(f"state_requests")
         total: int = 0
+        print(f"total = {total}")
         first_item: Item = items[0]
-        print(f"Total is now {total}.")
+        print(f"got first_item")
         total += first_item.stock  # Total = 0
+        print(f"total = {total}")
         first_item.set_stock(10)
+        print(f"set first_item stock to 10")
         total += first_item.stock  # total = 10
+        print(f"total = {total}")
         first_item.set_stock(0)
+        print(f"set first_item stock to 0")
         for x in items:
             total += x.stock  # total = 10
+            print(f"total = {total}")
             x.set_stock(5)
+            print(f"set x stock to 5")
             total += x.stock  # total = 10 + 5 + 5 = 20
+            print(f"total = {total}")
 
-        print(f"Total is now {total}.")
         total += first_item.stock  # total = 25
+        print(f"total = {total}")
         if total > 0:
             first_item.set_stock(1)
-
-        print(f"Total is now {total}.")
+            print(f"set first_item stock to 1")
 
         first_item: Item = first_item
+        print(f"set first_item to first_item")
         total += first_item.stock  # total = 26
+        print(f"end total = {total}")
         return total
 
     def pong(self) -> bool:

@@ -110,6 +110,7 @@ print()
 # user balance 0, stock 4.
 print(f"Final user balance: {user.balance.get()}")
 print(f"Final item stock: {item.stock.get()}")
+
 end_time = time.time()
 diff = (end_time - start_time) * 1000
 
