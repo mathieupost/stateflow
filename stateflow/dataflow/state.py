@@ -1,5 +1,7 @@
 from typing import Dict, Any, List
 
+from stateflow.dataflow.address import FunctionAddress
+
 
 class State:
     __slots__ = ["_data", "_version_id"]
@@ -25,6 +27,27 @@ class State:
 
     def get_version_id(self):
         return self._version_id
+
+
+class WriteSet(dict):
+    def __init__(self, *args, **kwargs):
+        super(WriteSet, self).__init__(*args, **kwargs)
+
+    def add(self, address: FunctionAddress, version: int):
+        """Adds the operator of the given FunctionAddress to the set.
+
+        And sets the version of the operator
+        """
+        namespace = address.function_type.namespace
+        if not namespace in self:
+            self[namespace] = dict()
+
+        operator = address.function_type.name
+        if not operator in self[namespace]:
+            self[namespace][operator] = dict()
+
+        key = address.key
+        self[namespace][operator][key] = version
 
 
 class StateDescriptor:
