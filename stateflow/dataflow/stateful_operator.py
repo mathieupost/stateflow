@@ -5,7 +5,7 @@ from stateflow.dataflow.event_flow import (
     ReturnNode,
     EventFlowGraph,
 )
-from stateflow.dataflow.state import State, WriteSet
+from stateflow.dataflow.state import State, Store, Version, WriteSet
 from stateflow.wrappers.class_wrapper import (
     ClassWrapper,
     InvocationResult,
@@ -87,6 +87,23 @@ class StatefulOperator(Operator):
         else:
             raise AttributeError(f"Unknown event type: {event_type}.")
 
+    def _deserialize_store(self, serialized_state) -> Store:
+        store_dict = self.serializer.deserialize_dict(serialized_state)
+        if type(store_dict) is Store:
+            return store_dict
+        return Store(store_dict)
+
+    def _update_store(self, store: Store, version: Version, updated_state: State, return_event: Event) -> bytes:
+        if updated_state is not None:
+            # If the event is an EventFlow, the payload will have a WriteSet to
+            # keep track of which objects were involved in the event/transaction.
+            event_id = return_event.event_id
+            write_set = return_event.payload.get("write_set")
+            version.update(updated_state, write_set)
+            store.update_version_for_event(event_id, version)
+
+        return store
+
     def handle(self, event: Event, serialized_state: Optional[bytes]) -> Tuple[Event, bytes]:
         """Handles incoming event and current state.
 
@@ -102,7 +119,8 @@ class StatefulOperator(Operator):
             return self._handle_create_with_state(event, serialized_state)
 
         if serialized_state:  # If state exists, we can deserialize it.
-            state = State(self.serializer.deserialize_dict(serialized_state))
+            store: Store = self._deserialize_store(serialized_state)
+            version = store.get_version_for_event(event.event_id)
         else:  # If state does not exists we can't execute these methods, so we return a KeyNotFound reply.
             return event.copy(
                 event_type=EventType.Reply.KeyNotFound,
@@ -113,16 +131,14 @@ class StatefulOperator(Operator):
 
         # We dispatch the event to find the correct execution method.
         return_event, updated_state = self._dispatch_event(
-            event.event_type, event, state
+            event.event_type, event, version.state
         )
 
         event = return_event
         print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
-        if updated_state is not None:
-            return return_event, self.serializer.serialize_dict(updated_state.get())
-
-        return return_event, updated_state
+        store = self._update_store(store, version, updated_state, return_event)
+        return return_event, self.serializer.serialize_dict(store)
 
     def _handle_create_with_state(
         self, event: Event, state: Optional[bytes]
@@ -154,9 +170,9 @@ class StatefulOperator(Operator):
             payload={"key": f"{event.fun_address.key}"},
         )
         new_state = event.payload["init_class_state"]
-        updated_state = State(new_state)
+        new_store = Store(initial_state=new_state)
 
-        return return_event, self.serializer.serialize_dict(updated_state.get())
+        return return_event, self.serializer.serialize_dict(new_store)
 
     def _handle_get_state(self, event: Event, state: State) -> Tuple[Event, State]:
         """Gets a field/attribute of the current state.
