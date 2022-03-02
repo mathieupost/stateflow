@@ -2,10 +2,11 @@ from typing import Dict, Any, List
 
 
 class State:
-    __slots__ = "_data"
+    __slots__ = ["_data", "_version_id"]
 
-    def __init__(self, data: dict):
+    def __init__(self, data: dict, version_id: int = 0):
         self._data = data
+        self._version_id = version_id
 
     def __getitem__(self, item):
         return self._data[item]
@@ -22,6 +23,8 @@ class State:
     def get(self):
         return self._data
 
+    def get_version_id(self):
+        return self._version_id
 
 
 class StateDescriptor:
