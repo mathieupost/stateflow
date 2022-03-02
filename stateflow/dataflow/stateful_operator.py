@@ -47,8 +47,10 @@ class StatefulOperator(Operator):
         :param event: the Request.InitClass event.
         :return: the created instance, embedded in an Event.
         """
-        res: InvocationResult = self.class_wrapper.init_class(event.payload["args"])
+        args = event.payload["args"]
+        res: InvocationResult = self.class_wrapper.init_class(args)
 
+        print(f"handle_create, {res}")
         key: str = res.return_results[0]
         created_state: State = res.updated_state
 
@@ -94,7 +96,7 @@ class StatefulOperator(Operator):
         :param serialized_state: the incoming state (in bytes). If this is None, we assume this 'key' does not exist.
         :return: a tuple of outgoing event + updated state (in bytes).
         """
-        print("event", event.event_id[:8], event.fun_address, event.event_type, event.payload if "flow" not in event.payload else event.payload["flow"])
+        print("event", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
         if event.event_type == EventType.Request.InitClass:
             return self._handle_create_with_state(event, serialized_state)
@@ -102,15 +104,12 @@ class StatefulOperator(Operator):
         if serialized_state:  # If state exists, we can deserialize it.
             state = State(self.serializer.deserialize_dict(serialized_state))
         else:  # If state does not exists we can't execute these methods, so we return a KeyNotFound reply.
-            return (
-                event.copy(
-                    event_type=EventType.Reply.KeyNotFound,
-                    payload={
-                        "error_message": f"Stateful instance with key={event.fun_address.key} does not exist."
-                    },
-                ),
-                serialized_state,
-            )
+            return event.copy(
+                event_type=EventType.Reply.KeyNotFound,
+                payload={
+                    "error_message": f"Stateful instance with key={event.fun_address.key} does not exist."
+                }
+            ), serialized_state
 
         # We dispatch the event to find the correct execution method.
         return_event, updated_state = self._dispatch_event(
@@ -118,7 +117,7 @@ class StatefulOperator(Operator):
         )
 
         event = return_event
-        print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload if "flow" not in event.payload else [ f"{event.payload['flow']}", f"{event.payload}" ])
+        print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
         if updated_state is not None:
             return return_event, self.serializer.serialize_dict(updated_state.get())
@@ -138,7 +137,7 @@ class StatefulOperator(Operator):
         :param state: the current state (in bytes), might be None.
         :return: the outgoing event and (updated) state.
         """
-        if state: # In this case, we already created a class before, so we will return an error.
+        if state:  # In this case, we already created a class before, so we will return an error.
             return (
                 event.copy(
                     event_type=EventType.Reply.FailedInvocation,

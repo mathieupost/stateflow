@@ -94,7 +94,7 @@ class EventFlowNode:
     def resolve_next(self, nodes: List["EventFlowNode"], block):
         self.set_next(nodes[0].id)
 
-    def set_next(self, next: Union[List[int],int]):
+    def set_next(self, next: Union[List[int], int]):
         """Set the next EventFlowNode.
         If there already exist a self.next, the input is extended.
 
@@ -235,11 +235,11 @@ class EventFlowNode:
 
         return new_node
 
-    def __str__(self) -> str:
-        res = f"{self.typ}.{self.fun_addr}"
+    def __repr__(self) -> str:
+        res = f"EventFlowNode(typ={self.typ}, fun_addr={self.fun_addr}"
         if hasattr(self, "fun_name"):
-            res += f".{self.fun_name}"
-        return res
+            res += f", fun_name={self.fun_name}"
+        return res + ")"
 
 
 class EventFlowGraph:
@@ -372,9 +372,9 @@ class EventFlowGraph:
             )
 
         return EventFlowGraph(current_node, all_nodes)
-    
-    def __str__(self) -> str:
-        return f"{self.current_node}"
+
+    def __repr__(self) -> str:
+        return f"EventFlowGraph(current_node={self.current_node})"
 
 
 class StartNode(EventFlowNode):
@@ -605,7 +605,6 @@ class InvokeSplitFun(EventFlowNode):
             node = graph.get_node_by_id(i)
             if node.typ != node_type:
                 return node
-
 
     def _set_definitions(self, return_results: List):
         for i, decl in enumerate(self.definitions):
