@@ -1,5 +1,4 @@
 from typing import Dict, Any, List
-import ujson
 
 
 class State:
@@ -23,13 +22,6 @@ class State:
     def get(self):
         return self._data
 
-    @staticmethod
-    def serialize(state: "State") -> str:
-        return ujson.encode(state._data)
-
-    @staticmethod
-    def deserialize(state_serialized: str) -> "State":
-        return State(ujson.decode(state_serialized))
 
 
 class StateDescriptor:
