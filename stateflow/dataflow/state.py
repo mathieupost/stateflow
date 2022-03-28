@@ -1,7 +1,7 @@
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Iterator, Tuple
 import jsonpickle
 
-from stateflow.dataflow.address import FunctionAddress
+from stateflow.dataflow.address import FunctionAddress, FunctionType
 
 
 class State:
@@ -54,7 +54,14 @@ class WriteSet(dict):
 
         key = address.key
         self[namespace][operator][key] = version
-
+    
+    def iterate_operators(self) -> Iterator[FunctionAddress]:
+        for namespace in self:
+            for operator in self[namespace]:
+                for key in self[namespace][operator]:
+                    ft = FunctionType(namespace, operator, True)
+                    fa = FunctionAddress(ft, key)
+                    yield fa
 
 class Version:
     def __init__(self, id: int, parent_id: int, state: State) -> None:
