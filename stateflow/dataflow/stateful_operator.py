@@ -12,7 +12,7 @@ from stateflow.wrappers.class_wrapper import (
     FailedInvocation,
 )
 from stateflow.wrappers.meta_wrapper import MetaWrapper
-from typing import NewType, List, Tuple, Optional
+from typing import Generator, NewType, List, Tuple, Optional
 from stateflow.serialization.pickle_serializer import SerDe, PickleSerializer
 
 NoType = NewType("NoType", None)
@@ -102,30 +102,33 @@ class StatefulOperator(Operator):
 
         return store
 
-    def handle(self, event: Event, serialized_state: Optional[bytes]) -> Tuple[Event, bytes]:
+    def handle(self, event: Event, serialized_state: Optional[bytes]) -> Generator[Event, None, Optional[bytes]]:
         """Handles incoming event and current state.
 
         Depending on the event type, a method is executed or a instance is created, or state is updated, etc.
 
         :param event: the incoming event.
         :param serialized_state: the incoming state (in bytes). If this is None, we assume this 'key' does not exist.
-        :return: a tuple of outgoing event + updated state (in bytes).
+        :return: a generator that yields outgoing events and returns the updated state (in bytes).
         """
         print("event", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
         if event.event_type == EventType.Request.InitClass:
-            return self._handle_create_with_state(event, serialized_state)
+            return_event, updated_state = self._handle_create_with_state(event, serialized_state)
+            yield return_event
+            return updated_state
 
         if serialized_state:  # If state exists, we can deserialize it.
             store: Store = self._deserialize_store(serialized_state)
             version = store.get_version_for_event(event.event_id)
         else:  # If state does not exists we can't execute these methods, so we return a KeyNotFound reply.
-            return event.copy(
+            yield event.copy(
                 event_type=EventType.Reply.KeyNotFound,
                 payload={
                     "error_message": f"Stateful instance with key={event.fun_address.key} does not exist."
                 }
-            ), serialized_state
+            )
+            return serialized_state
 
         # We dispatch the event to find the correct execution method.
         return_event, updated_state = self._dispatch_event(
@@ -137,7 +140,8 @@ class StatefulOperator(Operator):
         event = return_event
         print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
-        return return_event, self.serializer.serialize_dict(store)
+        yield return_event
+        return self.serializer.serialize_dict(store)
 
     def _handle_create_with_state(
         self, event: Event, state: Optional[bytes]
