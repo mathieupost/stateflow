@@ -108,6 +108,16 @@ class EgressRouter:
     def route_and_serialize(self, event: Event) -> Route:
         if event.event_type == EventType.Request.EventFlow:
             route = self._route_event_flow(event)
+        elif event.event_type == EventType.Request.CommitState:
+            event_id = event.event_id
+            if self.serialize_on_return:
+                event = self.serialize(event)
+            return Route(
+                RouteDirection.INTERNAL,
+                "",
+                event_id,
+                event,
+            )
         elif isinstance(event.event_type, EventType.Reply):
             event_id = event.event_id
             if self.serialize_on_return:
