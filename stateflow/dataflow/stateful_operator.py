@@ -93,14 +93,12 @@ class StatefulOperator(Operator):
             return store_dict
         return Store(store_dict)
 
-    def _update_store(self, store: Store, version: Version, updated_state: State, return_event: Event) -> bytes:
+    def _update_version(self, store: Store, version: Version, updated_state: State, write_set: WriteSet) -> Store:
         if updated_state is not None:
             # If the event is an EventFlow, the payload will have a WriteSet to
             # keep track of which objects were involved in the event/transaction.
-            event_id = return_event.event_id
-            write_set = return_event.payload.get("write_set")
             version.update(updated_state, write_set)
-            store.update_version_for_event(event_id, version)
+            store.set_version(version.id, version)
 
         return store
 
@@ -133,11 +131,12 @@ class StatefulOperator(Operator):
         return_event, updated_state = self._dispatch_event(
             event.event_type, event, version.state
         )
+        write_set: WriteSet = return_event.payload.get("write_set")
+        store = self._update_version(store, version, updated_state, write_set)
 
         event = return_event
         print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
-        store = self._update_store(store, version, updated_state, return_event)
         return return_event, self.serializer.serialize_dict(store)
 
     def _handle_create_with_state(

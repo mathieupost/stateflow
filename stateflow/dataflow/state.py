@@ -172,11 +172,6 @@ class Store:
         # TODO: check if last committed version is not changed (not different from base id)
         self.last_committed_version_id = version_id
 
-    def update_version_for_event(self, event_id: str, version: Version):
-        id = self.event_version_map[event_id]
-        self.set_version(id, version)
-        self.commit_version(id) # TODO: this should be done on receiving a Request.COMMIT
-
 
 class StateDescriptor:
     def __init__(self, state_desc: Dict[str, Any]):
