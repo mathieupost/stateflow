@@ -18,6 +18,18 @@ from stateflow.serialization.pickle_serializer import SerDe, PickleSerializer
 NoType = NewType("NoType", None)
 
 
+class StatefulGenerator:
+    """Wraps a generator function to retain its return value.
+    
+    This makes it possible to yield values in a generator function, while also
+    storing the final return value for later use."""
+    def __init__(self, gen):
+        self.gen = gen
+
+    def __iter__(self):
+        self.state = yield from self.gen
+
+
 class StatefulOperator(Operator):
     def __init__(
         self,
