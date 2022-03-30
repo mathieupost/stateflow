@@ -142,6 +142,10 @@ class StatefulOperator(Operator):
             )
             return serialized_state
 
+        if event.event_type == EventType.Request.CommitState:
+            store.commit_version(version.id)
+            return self.serializer.serialize_dict(store)
+
         # We dispatch the event to find the correct execution method.
         return_event, updated_state = self._dispatch_event(
             event.event_type, event, version.state
