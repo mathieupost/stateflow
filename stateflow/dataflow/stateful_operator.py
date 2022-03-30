@@ -12,7 +12,7 @@ from stateflow.wrappers.class_wrapper import (
     FailedInvocation,
 )
 from stateflow.wrappers.meta_wrapper import MetaWrapper
-from typing import Generator, NewType, List, Tuple, Optional
+from typing import Generator, Iterator, NewType, List, Tuple, Optional
 from stateflow.serialization.pickle_serializer import SerDe, PickleSerializer
 
 NoType = NewType("NoType", None)
@@ -153,11 +153,29 @@ class StatefulOperator(Operator):
         write_set: WriteSet = return_event.payload.get("write_set")
         store = self._update_version(store, version, updated_state, write_set)
 
+        # If we have an EventFlowGraph, we need to commit the state in all
+        # involved operators. Otherwise, we directly commit the state of the
+        # current operator since no others were involved in this operation.
+        flow_graph: EventFlowGraph = return_event.payload.get("flow", None)
+        if flow_graph is not None and isinstance(flow_graph.current_node, ReturnNode):
+            yield from self.generate_commit_events(return_event.event_id, write_set)
+        elif flow_graph is None:
+            store.commit_version(version.id)
+
         event = return_event
         print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
         yield return_event
         return self.serializer.serialize_dict(store)
+
+    def generate_commit_events(self, event_id: str, write_set: WriteSet) -> Iterator[Event]:
+        for address in write_set.iterate_operators():
+            yield Event(
+                event_id=event_id,
+                fun_address=address,
+                event_type=EventType.Request.CommitState,
+                payload={"write_set": write_set},
+            )
 
     def _handle_create_with_state(
         self, event: Event, state: Optional[bytes]
