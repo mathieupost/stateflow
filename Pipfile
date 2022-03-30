@@ -1,0 +1,49 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+graphviz = "*"
+libcst = "*"
+astpretty = "*"
+apache-beam = "*"
+ujson = "*"
+confluent-kafka = "*"
+beam-nuggets = "*"
+httplib2 = "*"
+google-api-python-client = "*"
+pytest-mock = "*"
+pytest-docker-fixtures = "*"
+pytest-timeout = "*"
+apache-flink = "*"
+python-dynamodb-lock-whatnick = "*"
+pynamodb = "*"
+boto3 = "*"
+fastapi = "*"
+uvicorn = "*"
+aiokafka = "*"
+httpx = "*"
+apache-flink-statefun = "*"
+aiohttp = "*"
+PyHamcrest = "*"
+graphene = ">=2.0"
+tartiflette = "*"
+tartiflette-asgi = "==0.*"
+starlette-graphene3 = "*"
+jsonpickle = "*"
+
+[dev-packages]
+autopep8 = "*"
+flake8 = "*"
+pytest = "*"
+coverage = "*"
+
+[requires]
+python_version = "3.8"
+
+[scripts]
+test = "coverage run --source=stateflow -m pytest tests"
+coverage = "coverage xml"
+lint-errors = "flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics"
+lint-warnings = "flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics"
