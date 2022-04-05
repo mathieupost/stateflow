@@ -8,6 +8,8 @@ class State:
     __slots__ = ["_data", "_version_id"]
 
     def __init__(self, data: dict, version_id: int = 0):
+        if isinstance(data, State):
+            data = data._data
         self._data = data
         self._version_id = version_id
 
