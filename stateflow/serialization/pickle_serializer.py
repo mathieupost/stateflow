@@ -1,10 +1,18 @@
-from stateflow.serialization.serde import SerDe
-from stateflow.dataflow.event import Event
-from typing import Dict
 import pickle
+from typing import Dict
+
+from stateflow.dataflow.event import Event
+from stateflow.dataflow.state import Store
+from stateflow.serialization.serde import SerDe
 
 
 class PickleSerializer(SerDe):
+    def serialize_store(self, store: Store) -> bytes:
+        return pickle.dumps(store)
+
+    def deserialize_store(self, store: bytes) -> Store:
+        return pickle.loads(store)
+
     def serialize_event(self, event: Event) -> bytes:
         return pickle.dumps(event)
 
