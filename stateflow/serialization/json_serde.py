@@ -21,6 +21,12 @@ class JsonSerializer(SerDe):
 
     def deserialize_store(self, store: bytes) -> Store:
         store_dict = self.deserialize_dict(store)
+        
+        # Make sure the keys are integers (encoding/decoding makes them strings).
+        encoded_versions = store_dict.get("encoded_versions", {})
+        if len(encoded_versions) > 0 and not isinstance(next(iter(encoded_versions)), int):
+            store_dict["encoded_versions"] = {int(k): v for k, v in store_dict["encoded_versions"].items()}
+
         if type(store_dict) is Store:
             return store_dict
         return Store(store_dict)
