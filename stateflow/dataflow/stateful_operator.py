@@ -99,12 +99,6 @@ class StatefulOperator(Operator):
         else:
             raise AttributeError(f"Unknown event type: {event_type}.")
 
-    def _deserialize_store(self, serialized_state) -> Store:
-        store_dict = self.serializer.deserialize_dict(serialized_state)
-        if type(store_dict) is Store:
-            return store_dict
-        return Store(store_dict)
-
     def _update_version(self, store: Store, version: Version, updated_state: State, write_set: WriteSet) -> Store:
         if updated_state is not None:
             # If the event is an EventFlow, the payload will have a WriteSet to
@@ -131,7 +125,7 @@ class StatefulOperator(Operator):
             return updated_state
 
         if serialized_state:  # If state exists, we can deserialize it.
-            store: Store = self._deserialize_store(serialized_state)
+            store: Store = self.serializer.deserialize_store(serialized_state)
             version = store.get_version_for_event(event.event_id)
         else:  # If state does not exists we can't execute these methods, so we return a KeyNotFound reply.
             yield event.copy(
@@ -144,7 +138,7 @@ class StatefulOperator(Operator):
 
         if event.event_type == EventType.Request.CommitState:
             store.commit_version(version.id)
-            return self.serializer.serialize_dict(store)
+            return self.serializer.serialize_store(store)
 
         # We dispatch the event to find the correct execution method.
         return_event, updated_state = self._dispatch_event(
@@ -166,7 +160,7 @@ class StatefulOperator(Operator):
         print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
         yield return_event
-        return self.serializer.serialize_dict(store)
+        return self.serializer.serialize_store(store)
 
     def generate_commit_events(self, event_id: str, write_set: WriteSet) -> Iterator[Event]:
         for address in write_set.iterate_operators():
@@ -209,7 +203,7 @@ class StatefulOperator(Operator):
         new_state = event.payload["init_class_state"]
         new_store = Store(initial_state=new_state)
 
-        return return_event, self.serializer.serialize_dict(new_store)
+        return return_event, self.serializer.serialize_store(new_store)
 
     def _handle_get_state(self, event: Event, state: State) -> Tuple[Event, State]:
         """Gets a field/attribute of the current state.
