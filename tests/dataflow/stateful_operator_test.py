@@ -1,14 +1,18 @@
 import uuid
-from tests.context import stateflow
-import pytest
+from turtle import up
 
-from tests.common.common_classes import stateflow
-from stateflow.dataflow.event import Event, EventType
+import pytest
 from stateflow.dataflow.address import FunctionAddress, FunctionType
 from stateflow.dataflow.args import Arguments
-from stateflow.dataflow.state import State, Store
-from stateflow.dataflow.stateful_operator import StatefulGenerator, StatefulOperator
+from stateflow.dataflow.event import Event, EventType
+from stateflow.dataflow.state import State
+from stateflow.dataflow.stateful_operator import (StatefulGenerator,
+                                                  StatefulOperator)
 from stateflow.serialization.json_serde import JsonSerializer
+from tests.common.common_classes import stateflow
+from tests.context import stateflow
+from tests.state.serialize_utils import (serialized_store_to_state,
+                                         state_to_serialized_store)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -94,10 +98,10 @@ class TestStatefulOperator:
 
         state = State({"username": "wouter", "balance": 10, "items": []})
         handler = StatefulGenerator(operator.handle(
-            event, TestStatefulOperator.state_to_serialized_store(state)
+            event, state_to_serialized_store(state)
         ))
         events = list(handler)
-        updated_state = TestStatefulOperator.serialized_store_to_state(handler.state)
+        updated_state = serialized_store_to_state(handler.state)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.SuccessfulInvocation
@@ -117,10 +121,10 @@ class TestStatefulOperator:
 
         state = State({"username": "wouter", "balance": 10, "items": []})
         handler = StatefulGenerator(operator.handle(
-            event, TestStatefulOperator.state_to_serialized_store(state)
+            event, state_to_serialized_store(state)
         ))
         events = list(handler)
-        updated_state = TestStatefulOperator.serialized_store_to_state(handler.state)
+        updated_state = serialized_store_to_state(handler.state)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.FailedInvocation
@@ -139,10 +143,10 @@ class TestStatefulOperator:
 
         state = State({"username": "wouter", "balance": 11, "items": []})
         handler = StatefulGenerator(operator.handle(
-            event, TestStatefulOperator.state_to_serialized_store(state)
+            event, state_to_serialized_store(state)
         ))
         events = list(handler)
-        updated_state = TestStatefulOperator.serialized_store_to_state(handler.state)
+        updated_state = serialized_store_to_state(handler.state)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.SuccessfulStateRequest
@@ -162,10 +166,10 @@ class TestStatefulOperator:
 
         state = State({"username": "wouter", "balance": 11, "items": []})
         handler = StatefulGenerator(operator.handle(
-            event, TestStatefulOperator.state_to_serialized_store(state)
+            event, state_to_serialized_store(state)
         ))
         events = list(handler)
-        updated_state = TestStatefulOperator.serialized_store_to_state(handler.state)
+        updated_state = serialized_store_to_state(handler.state)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.SuccessfulStateRequest
@@ -186,10 +190,10 @@ class TestStatefulOperator:
 
         state = State({"username": "wouter", "balance": 11, "items": []})
         handler = StatefulGenerator(operator.handle(
-            event, TestStatefulOperator.state_to_serialized_store(state)
+            event, state_to_serialized_store(state)
         ))
         events = list(handler)
-        updated_state = TestStatefulOperator.serialized_store_to_state(handler.state)
+        updated_state = serialized_store_to_state(handler.state)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.FoundClass
@@ -213,14 +217,3 @@ class TestStatefulOperator:
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.KeyNotFound
         assert handler.state is None
-
-    @staticmethod
-    def serialized_store_to_state(serialized_store: bytes) -> State:
-        store = JsonSerializer().deserialize_store(serialized_store)
-        version = store.get_version(store.last_committed_version_id)
-        return version.state
-
-    @staticmethod
-    def state_to_serialized_store(state: State) -> bytes:
-        store = Store(initial_state=state)
-        return JsonSerializer().serialize_store(store)
