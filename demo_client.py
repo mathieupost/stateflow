@@ -1,6 +1,5 @@
 from demo_common import User, Item, stateflow
 from stateflow.client.kafka_client import StateflowClient
-from stateflow.util.local_runtime import LocalRuntime
 from stateflow.client.future import StateflowFuture, StateflowFailure
 from stateflow.client.aws_gateway_client import AWSGatewayClient
 from stateflow.client.kafka_client import StateflowKafkaClient

@@ -1,17 +1,15 @@
-from stateflow.client.stateflow_client import StateflowClient, StateflowFuture, T
-from stateflow.dataflow.dataflow import Dataflow
-from stateflow.dataflow.stateful_operator import StatefulOperator
-from stateflow.serialization.pickle_serializer import SerDe, PickleSerializer
-from stateflow.dataflow.dataflow import (
-    IngressRouter,
-    EgressRouter,
-    Route,
-    RouteDirection,
-    EventType,
-)
-from stateflow.dataflow.event import Event
-from typing import Dict, ByteString
 import time
+from queue import Queue
+from typing import ByteString, Dict, Iterator
+
+from stateflow.client.stateflow_client import (StateflowClient,
+                                               StateflowFuture, T)
+from stateflow.dataflow.dataflow import (Dataflow, EgressRouter, EventType,
+                                         IngressRouter, Route, RouteDirection)
+from stateflow.dataflow.event import Event
+from stateflow.dataflow.stateful_operator import (StatefulGenerator,
+                                                  StatefulOperator)
+from stateflow.serialization.pickle_serializer import PickleSerializer, SerDe
 
 
 class LocalRuntime(StateflowClient):
@@ -40,7 +38,7 @@ class LocalRuntime(StateflowClient):
         self.state: Dict[str, ByteString] = {}
         self.return_future: bool = return_future
 
-    def invoke_operator(self, route: Route) -> Event:
+    def invoke_operator(self, route: Route) -> Iterator[Event]:
         event: Event = route.value
 
         operator_name: str = route.route_name
@@ -48,7 +46,7 @@ class LocalRuntime(StateflowClient):
 
         if event.event_type == EventType.Request.InitClass and route.key is None:
             new_event = operator.handle_create(event)
-            return self.invoke_operator(
+            yield from self.invoke_operator(
                 Route(
                     RouteDirection.INTERNAL,
                     operator_name,
@@ -59,29 +57,38 @@ class LocalRuntime(StateflowClient):
         else:
             full_key: str = f"{operator_name}_{route.key}"
             operator_state = self.state.get(full_key)
-            return_event, updated_state = operator.handle(event, operator_state)
-            self.state[full_key] = updated_state
 
-            return return_event
+            handler = StatefulGenerator(operator.handle(event, operator_state))
+            yield from handler
 
-    def handle_invocation(self, event: Event) -> Route:
+            self.state[full_key] = handler.state
+
+    def handle_invocation(self, event: Event) -> Iterator[Route]:
         route: Route = self.ingress_router.route(event)
 
         if route.direction == RouteDirection.INTERNAL:
-            return self.egress_router.route_and_serialize(self.invoke_operator(route))
+            for event in self.invoke_operator(route):
+                yield self.egress_router.route_and_serialize(event)
         elif route.direction == RouteDirection.EGRESS:
-            return self.egress_router.route_and_serialize(route.value)
+            yield self.egress_router.route_and_serialize(route.value)
         else:
             return route
 
     def execute_event(self, event: Event) -> Event:
         parsed_event: Event = self.ingress_router.parse(event)
-        return_route: Route = self.handle_invocation(parsed_event)
+        
+        event_queue: Queue = Queue()
+        event_queue.put(parsed_event)
 
-        while return_route.direction != RouteDirection.CLIENT:
-            return_route = self.handle_invocation(return_route.value)
+        while not event_queue.empty():
+            event = event_queue.get()
+            for route in self.handle_invocation(event):
+                if route.direction == RouteDirection.CLIENT:
+                    return_event = route.value
+                else:
+                    event_queue.put(route.value)
 
-        return return_route.value
+        return return_event
 
     def send(self, event: Event, return_type: T = None) -> T:
         return_event = self.execute_event(self.serializer.serialize_event(event))
