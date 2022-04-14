@@ -1,4 +1,4 @@
-from typing import Dict, Any, Iterator, Tuple
+from typing import Dict, Any, Iterator
 import jsonpickle
 
 from stateflow.dataflow.address import FunctionAddress, FunctionType
@@ -116,13 +116,13 @@ class Store:
         self.last_committed_version_id: int = data["last_committed_version_id"]
         self.event_version_map: Dict[str, int] = data["event_version_map"]
 
-    def create_new_version(self) -> Tuple[int, Version]:
+    def create_new_version(self) -> Version:
         """Create a new version based on the last committed version.
 
         Increments the highest available version id to use as id for the new
         version.
 
-        :return: the version id and the new version.
+        :return: the new version.
         """
         # Add 1 to the currently highest version id
         new_id = max(self.encoded_versions.keys()) + 1
@@ -131,7 +131,7 @@ class Store:
         last_version = self.get_version(self.last_committed_version_id)
         version = last_version.create_child(new_id)
 
-        return new_id, version
+        return version
 
     def set_version(self, id: int, version: Version):
         """Encodes and sets the given version.
@@ -147,7 +147,7 @@ class Store:
         Version object.
 
         :param id: the id of the version to retrieve.
-        :return: a Version.
+        :return: the version with the given id.
         """
         encoded_version = self.encoded_versions[id]
         return jsonpickle.decode(encoded_version)
@@ -159,15 +159,15 @@ class Store:
         created.
 
         :param event_id: the id of the event to get the corresponding version for.
-        :return: the version id and the version of the given event.
+        :return: the version for the given event id.
         """
         if event_id in self.event_version_map:
             id = self.event_version_map[event_id]
             version = self.get_version(id)
             return version
         else:
-            id, version = self.create_new_version()
-            self.event_version_map[event_id] = id
+            version = self.create_new_version()
+            self.event_version_map[event_id] = version.id
             return version
 
     def commit_version(self, version_id):
