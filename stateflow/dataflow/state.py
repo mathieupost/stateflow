@@ -152,7 +152,7 @@ class Store:
         encoded_version = self.encoded_versions[id]
         return jsonpickle.decode(encoded_version)
 
-    def get_version_for_event(self, event_id: str) -> Version:
+    def get_or_create_version_for_event(self, event_id: str) -> Version:
         """Returns the version for the given event id.
 
         If no version exists yet for the given event id, a new version will be

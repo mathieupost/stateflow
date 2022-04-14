@@ -126,7 +126,7 @@ class StatefulOperator(Operator):
 
         if serialized_state:  # If state exists, we can deserialize it.
             store: Store = self.serializer.deserialize_store(serialized_state)
-            version = store.get_version_for_event(event.event_id)
+            version = store.get_or_create_version_for_event(event.event_id)
         else:  # If state does not exists we can't execute these methods, so we return a KeyNotFound reply.
             yield event.copy(
                 event_type=EventType.Reply.KeyNotFound,
