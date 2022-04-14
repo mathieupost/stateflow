@@ -152,6 +152,13 @@ class Store:
         encoded_version = self.encoded_versions[id]
         return jsonpickle.decode(encoded_version)
 
+    def get_last_committed_version(self) -> Version:
+        """Gets the last committed version.
+
+        :return: the last committed version.
+        """
+        return self.get_version(self.last_committed_version_id)
+
     def get_version_for_event(self, event_id: str) -> Optional[Version]:
         """Gets the version for the given event id, if it exists.
         
