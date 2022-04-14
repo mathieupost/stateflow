@@ -1,4 +1,4 @@
-from typing import Dict, Any, Iterator
+from typing import Dict, Any, Iterator, Optional
 import jsonpickle
 
 from stateflow.dataflow.address import FunctionAddress, FunctionType
@@ -152,6 +152,18 @@ class Store:
         encoded_version = self.encoded_versions[id]
         return jsonpickle.decode(encoded_version)
 
+    def get_version_for_event(self, event_id: str) -> Optional[Version]:
+        """Gets the version for the given event id, if it exists.
+        
+        :param event_id: the id of the event to get the corresponding version for.
+        :return: the version for the given event id, or None if no version exists.
+        """
+        if event_id in self.event_version_map:
+            id = self.event_version_map[event_id]
+            version = self.get_version(id)
+            return version
+        return None
+
     def get_or_create_version_for_event(self, event_id: str) -> Version:
         """Returns the version for the given event id.
 
@@ -161,14 +173,11 @@ class Store:
         :param event_id: the id of the event to get the corresponding version for.
         :return: the version for the given event id.
         """
-        if event_id in self.event_version_map:
-            id = self.event_version_map[event_id]
-            version = self.get_version(id)
-            return version
-        else:
+        version = self.get_version_for_event(event_id)
+        if not version:
             version = self.create_new_version()
             self.event_version_map[event_id] = version.id
-            return version
+        return version
 
     def commit_version(self, version_id):
         # TODO: check if last committed version is not changed (not different from base id)
