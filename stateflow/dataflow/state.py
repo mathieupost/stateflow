@@ -190,6 +190,10 @@ class Store:
         # TODO: check if last committed version is not changed (not different from base id)
         self.last_committed_version_id = version_id
 
+    def commit_version_for_event_id(self, event_id):
+        """Commits the version for the given event id."""
+        version_id = self.event_version_map[event_id]
+        self.commit_version(version_id)
 
 class StateDescriptor:
     def __init__(self, state_desc: Dict[str, Any]):
