@@ -137,7 +137,7 @@ class StatefulOperator(Operator):
             return serialized_state
 
         if event.event_type == EventType.Request.CommitState:
-            store.commit_version(version.id)
+            store.commit_version_for_event_id(event.event_id)
             return self.serializer.serialize_store(store)
 
         # We dispatch the event to find the correct execution method.
