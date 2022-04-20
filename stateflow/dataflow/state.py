@@ -140,10 +140,6 @@ class Version:
     def set_write_set(self, write_set: WriteSet):
         self.write_set = write_set
     
-    def update(self, state: State, write_set: WriteSet):
-        self.set_state(state)
-        self.set_write_set(write_set)
-
 
 class Store:
     def __init__(self, data=None, initial_state=None) -> None:

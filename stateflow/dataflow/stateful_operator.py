@@ -99,15 +99,6 @@ class StatefulOperator(Operator):
         else:
             raise AttributeError(f"Unknown event type: {event_type}.")
 
-    def _update_version(self, store: Store, version: Version, updated_state: State, write_set: WriteSet) -> Store:
-        if updated_state is not None:
-            # If the event is an EventFlow, the payload will have a WriteSet to
-            # keep track of which objects were involved in the event/transaction.
-            version.update(updated_state, write_set)
-            store.set_version(version.id, version)
-
-        return store
-
     def handle(self, event: Event, serialized_state: Optional[bytes]) -> Generator[Event, None, Optional[bytes]]:
         """Handles incoming event and current state.
 
@@ -194,8 +185,8 @@ class StatefulOperator(Operator):
         event, updated_state = self._dispatch_event(
             event.event_type, event, version.state
         )
-        write_set: WriteSet = event.payload.get("write_set")
-        store = self._update_version(store, version, updated_state, write_set)
+        version.set_state(updated_state)
+        store.set_version(version.id, version)
 
         flow_graph: EventFlowGraph = event.payload.get("flow", None)
         if flow_graph is not None and isinstance(flow_graph.current_node, ReturnNode):
