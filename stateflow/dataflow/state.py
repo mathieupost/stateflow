@@ -67,6 +67,32 @@ class WriteSet(dict):
         key = address.key or ""
         self.add(namespace, operator, key, version)
 
+    def get(self, namespace: str, operator: str, key: str) -> int:
+        """Returns the version for the given namespace, operator and key.
+        
+        If the version does not exist, -1 is returned.
+        """
+        if namespace not in self:
+            return -1
+
+        if operator not in self[namespace]:
+            return -1
+
+        if key not in self[namespace][operator]:
+            return -1
+
+        return self[namespace][operator][key]
+
+    def get_address(self, address: FunctionAddress) -> int:
+        """Returns the version for the given FunctionAddress.
+        
+        If the version does not exist, -1 is returned.
+        """
+        namespace = address.function_type.namespace
+        operator = address.function_type.name
+        key = address.key or ""
+        return self.get(namespace, operator, key)
+
     def iterate(self) -> Iterator[Tuple[str, str, str, int]]:
         """Iterates over all (namespace, operator, key, version) tuples in the WriteSet."""
         for namespace in self:
