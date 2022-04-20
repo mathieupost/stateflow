@@ -148,13 +148,20 @@ class StatefulOperator(Operator):
         write_set: WriteSet = return_event.payload.get("write_set")
         store = self._update_version(store, version, updated_state, write_set)
 
-        # If we have an EventFlowGraph, we need to commit the state in all
-        # involved operators. Otherwise, we directly commit the state of the
-        # current operator since no others were involved in this operation.
         flow_graph: EventFlowGraph = return_event.payload.get("flow", None)
         if flow_graph is not None and isinstance(flow_graph.current_node, ReturnNode):
-            yield from self.generate_commit_events(return_event.event_id, write_set)
+            # If the current node in the return event is a ReturnNode, directly
+            # commit the version of this operator.
+            store.commit_version(version.id)
+            # And yield CommitState events for all other involved operators.
+            for address in write_set.iterate_addresses():
+                if address == current_address:
+                    continue
+                yield Event(return_event.event_id, address, EventType.Request.CommitState,
+                            {"write_set": write_set})
         elif flow_graph is None:
+            # If we are not in an EventFlow, we directly commit the version,
+            # because we don't need to wait for other operators to commit.
             store.commit_version(version.id)
 
         event = return_event
@@ -162,15 +169,6 @@ class StatefulOperator(Operator):
 
         yield return_event
         return self.serializer.serialize_store(store)
-
-    def generate_commit_events(self, event_id: str, write_set: WriteSet) -> Iterator[Event]:
-        for address in write_set.iterate_addresses():
-            yield Event(
-                event_id=event_id,
-                fun_address=address,
-                event_type=EventType.Request.CommitState,
-                payload={"write_set": write_set},
-            )
 
     def _handle_create_with_state(
         self, event: Event, state: Optional[bytes]
