@@ -185,6 +185,9 @@ class StatefulOperator(Operator):
         event, updated_state = self._dispatch_event(
             event.event_type, event, version.state
         )
+        if updated_state is None:
+            yield event
+            return None
         version.set_state(updated_state)
         store.set_version(version.id, version)
 
