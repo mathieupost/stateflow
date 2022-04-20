@@ -41,22 +41,32 @@ class WriteSet(dict):
     def __init__(self, *args, **kwargs):
         super(WriteSet, self).__init__(*args, **kwargs)
 
-    def add(self, address: FunctionAddress, version: int):
-        """Adds the operator of the given FunctionAddress to the set.
-
-        And sets the version of the operator
+    def add(self, namespace: str, operator: str, key: str, version: int):
+        """Adds the version for the given namespace, operator and key.
+        
+        If the version already exists, the maximum version is used.
         """
-        namespace = address.function_type.namespace
         if not namespace in self:
             self[namespace] = dict()
 
-        operator = address.function_type.name
         if not operator in self[namespace]:
             self[namespace][operator] = dict()
 
-        key = address.key
-        self[namespace][operator][key] = version
-    
+        if not key in self[namespace][operator]:
+            self[namespace][operator][key] = version
+        else:
+            self[namespace][operator][key] = max(self[namespace][operator][key], version)
+
+    def add_address(self, address: FunctionAddress, version: int):
+        """Adds the version of the given FunctionAddress to the set.
+        
+        If the version already exists, the maximum version is used.
+        """
+        namespace = address.function_type.namespace
+        operator = address.function_type.name
+        key = address.key or ""
+        self.add(namespace, operator, key, version)
+
     def iterate(self) -> Iterator[Tuple[str, str, str, int]]:
         """Iterates over all (namespace, operator, key, version) tuples in the WriteSet."""
         for namespace in self:
