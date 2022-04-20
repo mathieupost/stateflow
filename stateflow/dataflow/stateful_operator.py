@@ -164,7 +164,7 @@ class StatefulOperator(Operator):
         return self.serializer.serialize_store(store)
 
     def generate_commit_events(self, event_id: str, write_set: WriteSet) -> Iterator[Event]:
-        for address in write_set.iterate_operators():
+        for address in write_set.iterate_addresses():
             yield Event(
                 event_id=event_id,
                 fun_address=address,

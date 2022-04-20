@@ -57,13 +57,17 @@ class WriteSet(dict):
         key = address.key
         self[namespace][operator][key] = version
     
-    def iterate_operators(self) -> Iterator[FunctionAddress]:
+    def iterate(self) -> Iterator[Tuple[str, str, str, int]]:
+        """Iterates over all (namespace, operator, key, version) tuples in the WriteSet."""
         for namespace in self:
             for operator in self[namespace]:
                 for key in self[namespace][operator]:
-                    ft = FunctionType(namespace, operator, True)
-                    fa = FunctionAddress(ft, key)
-                    yield fa
+                    yield (namespace, operator, key, self[namespace][operator][key])
+
+    def iterate_addresses(self) -> Iterator[FunctionAddress]:
+        """Iterates over all FunctionAddresses in the WriteSet."""
+        for namespace, operator, key, _ in self.iterate():
+            yield FunctionAddress(namespace, operator, key)
 
 class Version:
     def __init__(self, id: int, parent_id: int, state: State) -> None:
