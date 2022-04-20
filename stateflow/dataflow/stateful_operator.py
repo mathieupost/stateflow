@@ -120,8 +120,8 @@ class StatefulOperator(Operator):
         print("event", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
         if event.event_type == EventType.Request.InitClass:
-            return_event, updated_state = self._handle_create_with_state(event, serialized_state)
-            yield return_event
+            event, updated_state = self._handle_create_with_state(event, serialized_state)
+            yield event
             return updated_state
 
         if serialized_state:  # If state exists, we can deserialize it.
@@ -187,13 +187,13 @@ class StatefulOperator(Operator):
             version = store.create_version()
 
         # We dispatch the event to find the correct execution method.
-        return_event, updated_state = self._dispatch_event(
+        event, updated_state = self._dispatch_event(
             event.event_type, event, version.state
         )
-        write_set: WriteSet = return_event.payload.get("write_set")
+        write_set: WriteSet = event.payload.get("write_set")
         store = self._update_version(store, version, updated_state, write_set)
 
-        flow_graph: EventFlowGraph = return_event.payload.get("flow", None)
+        flow_graph: EventFlowGraph = event.payload.get("flow", None)
         if flow_graph is not None and isinstance(flow_graph.current_node, ReturnNode):
             # If the current node in the return event is a ReturnNode, directly
             # commit the version of this operator.
@@ -202,17 +202,16 @@ class StatefulOperator(Operator):
             for address in write_set.iterate_addresses():
                 if address == current_address:
                     continue
-                yield Event(return_event.event_id, address, EventType.Request.CommitState,
+                yield Event(event.event_id, address, EventType.Request.CommitState,
                             {"write_set": write_set})
         elif flow_graph is None:
             # If we are not in an EventFlow, we directly commit the version,
             # because we don't need to wait for other operators to commit.
             store.commit_version(version.id)
 
-        event = return_event
         print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
-        yield return_event
+        yield event
         return self.serializer.serialize_store(store)
 
     def _handle_create_with_state(
