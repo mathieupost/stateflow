@@ -235,8 +235,12 @@ class Store:
         return version
 
     def commit_version(self, version_id):
-        # TODO: check if last committed version is not changed (not different from base id)
-        self.last_committed_version_id = version_id
+        """Commits the version with the given id.
+        
+        If a new version is committed before, nothing happens.
+        """
+        if version_id > self.last_committed_version_id:
+            self.last_committed_version_id = version_id
 
     def commit_version_for_event_id(self, event_id):
         """Commits the version for the given event id."""
