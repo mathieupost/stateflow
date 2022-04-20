@@ -1,4 +1,4 @@
-from typing import Dict, Any, Iterator, Optional
+from typing import Dict, Any, Iterator, Tuple
 import jsonpickle
 
 from stateflow.dataflow.address import FunctionAddress, FunctionType
@@ -32,8 +32,7 @@ class State:
         return self._version_id
 
     def copy_with_version_id(self, version_id) -> "State":
-        """Copies the state, but overwrites the version_id attribute.
-        """
+        """Copies the state, but overwrites the version_id attribute."""
         return State(self._data, version_id)
 
 
@@ -151,7 +150,8 @@ class Store:
         """Initialized the store object from the given dict.
         
         If an initial state is provided, a new Store will be created with the
-        given initial state as version 0."""
+        given initial state as version 0.
+        """
         if initial_state:
             self.encoded_versions: Dict[int, bytes] = dict()
             self.last_committed_version_id: int = 0
@@ -164,7 +164,7 @@ class Store:
         self.last_committed_version_id: int = data["last_committed_version_id"]
         self.event_version_map: Dict[str, int] = data["event_version_map"]
 
-    def create_new_version(self) -> Version:
+    def create_version(self, min_parent_id = -1) -> Version:
         """Create a new version based on the last committed version.
 
         Increments the highest available version id to use as id for the new
@@ -175,8 +175,12 @@ class Store:
         # Add 1 to the currently highest version id
         new_id = max(self.encoded_versions.keys()) + 1
 
-        # Copy state from last committed state
-        last_version = self.get_version(self.last_committed_version_id)
+        # Use at least the last committed version id as parent id
+        if min_parent_id < self.last_committed_version_id:
+            min_parent_id = self.last_committed_version_id
+
+        # Copy base version
+        last_version = self.get_version(min_parent_id)
         version = last_version.create_child(new_id)
 
         return version
@@ -207,31 +211,24 @@ class Store:
         """
         return self.get_version(self.last_committed_version_id)
 
-    def get_version_for_event(self, event_id: str) -> Optional[Version]:
-        """Gets the version for the given event id, if it exists.
+    def get_version_for_event_id(self, event_id: str) -> Version:
+        """Gets the version for the given event id.
         
-        :param event_id: the id of the event to get the corresponding version for.
-        :return: the version for the given event id, or None if no version exists.
-        """
-        if event_id in self.event_version_map:
-            id = self.event_version_map[event_id]
-            version = self.get_version(id)
-            return version
-        return None
-
-    def get_or_create_version_for_event(self, event_id: str) -> Version:
-        """Returns the version for the given event id.
-
-        If no version exists yet for the given event id, a new version will be
-        created.
-
         :param event_id: the id of the event to get the corresponding version for.
         :return: the version for the given event id.
         """
-        version = self.get_version_for_event(event_id)
-        if not version:
-            version = self.create_new_version()
-            self.event_version_map[event_id] = version.id
+        id = self.event_version_map[event_id]
+        version = self.get_version(id)
+        return version
+
+    def create_version_for_event_id(self, event_id: str, min_parent_id = -1) -> Version:
+        """Creates a new version for the given event id.
+
+        :param event_id: the id of the event to create the corresponding version for.
+        :return: the version for the given event id.
+        """
+        version = self.create_version(min_parent_id)
+        self.event_version_map[event_id] = version.id
         return version
 
     def commit_version(self, version_id):
