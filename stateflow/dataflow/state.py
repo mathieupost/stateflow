@@ -93,6 +93,14 @@ class WriteSet(dict):
         key = address.key or ""
         return self.get(namespace, operator, key)
 
+    def exists(self, namespace: str, operator: str, key: str) -> bool:
+        """Returns True if a version for the given namespace, operator and key exists."""
+        return self.get(namespace, operator, key) != -1
+
+    def address_exists(self, address: FunctionAddress) -> bool:
+        """Returns True if a version for the given FunctionAddress exists."""
+        return self.get_address(address) != -1
+
     def iterate(self) -> Iterator[Tuple[str, str, str, int]]:
         """Iterates over all (namespace, operator, key, version) tuples in the WriteSet."""
         for namespace in self:
