@@ -139,7 +139,52 @@ class StatefulOperator(Operator):
             store.commit_version_for_event_id(event.event_id)
             return self.serializer.serialize_store(store)
 
-        version = store.get_or_create_version_for_event(event.event_id)
+        is_flow = event.event_type == EventType.Request.EventFlow
+        if is_flow:
+            flow_graph: EventFlowGraph = event.payload["flow"]
+            current_address: FunctionAddress = flow_graph.current_node.fun_addr
+
+            write_set: WriteSet = event.payload.get("write_set", WriteSet())
+            last_write_set: WriteSet = event.payload.get("last_write_set", WriteSet())
+            if not write_set.address_exists(current_address):
+                # If the current operator is not in the write_set, it is not
+                # yet used in the event flow and we need to:
+                # - check if a minimum version is set in the last_write_set
+                min_parent_id = last_write_set.get_address(current_address)
+                # - create a new version
+                version = store.create_version_for_event_id(event.event_id, min_parent_id)
+                # - add it to the write_set
+                write_set.add_address(current_address, version.id)
+                last_write_set.add_address(current_address, version.parent_id)
+                # - add the write_set to the event
+                event.payload["write_set"] = write_set
+                # - check if parent_write_set has newer versions of operators
+                #   that are in the write_set and last_write_set.
+                parent_write_set = store.get_version(version.parent_id).write_set or WriteSet()
+                # - loop over all addresses in the write_set to check if they
+                #   are consistent with the parent_write_set.
+                for ns, o, k, min_parent_version in parent_write_set.iterate():
+                    if write_set.exists(ns, o, k):
+                        # If the operator is in the write_set, it is used in
+                        # this flow. So, we need to make sure that the version
+                        # of the operator is at least as high as the minimum
+                        # version in the parent_write_set. If it is lower, then
+                        # we know that a newer version existed before the flow
+                        # started, and we should restart the flow to use the
+                        # newer version.
+                        parent_version = last_write_set.get(ns, o, k)
+                        if parent_version < min_parent_version:
+                            print(f"Outdated version for {ns}:{o}:{k} ({parent_version} < {min_parent_version})")
+                            pass # TODO: restart the flow
+                    # - update the last_write_set to include the other operators
+                    last_write_set.add(ns, o, k, min_parent_version)
+                event.payload["last_write_set"] = last_write_set
+            else:
+                # If the current operator is in the write set, we need to
+                # get the version for this event flow.
+                version = store.get_version_for_event_id(event.event_id)
+        else:
+            version = store.create_version()
 
         # We dispatch the event to find the correct execution method.
         return_event, updated_state = self._dispatch_event(
