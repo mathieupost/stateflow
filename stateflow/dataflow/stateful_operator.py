@@ -342,10 +342,6 @@ class StatefulOperator(Operator):
         flow_graph: EventFlowGraph = event.payload["flow"]
         current_address: FunctionAddress = flow_graph.current_node.fun_addr
 
-        write_set = event.payload.get("write_set", WriteSet())
-        write_set.add_address(current_address, state.get_version_id())
-        event.payload["write_set"] = write_set
-
         updated_state, instance = flow_graph.step(self.class_wrapper, state)
 
         # Keep stepping :)
