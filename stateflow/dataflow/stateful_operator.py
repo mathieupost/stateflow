@@ -136,7 +136,11 @@ class StatefulOperator(Operator):
             return serialized_state
 
         if event.event_type == EventType.Request.CommitState:
-            store.commit_version_for_event_id(event.event_id)
+            version = store.get_version_for_event_id(event.event_id)
+            write_set = event.payload["write_set"]
+            version.set_write_set(write_set)
+            store.set_version(version.id, version)
+            store.commit_version(version.id)
             return self.serializer.serialize_store(store)
 
         is_flow = event.event_type == EventType.Request.EventFlow
