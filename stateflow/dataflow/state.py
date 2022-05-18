@@ -110,7 +110,9 @@ class WriteSet(dict):
     def iterate_addresses(self) -> Iterator[FunctionAddress]:
         """Iterates over all FunctionAddresses in the WriteSet."""
         for namespace, operator, key, _ in self.iterate():
-            yield FunctionAddress(namespace, operator, key)
+            ft = FunctionType(namespace, operator, True)
+            fa = FunctionAddress(ft, key)
+            yield fa
 
 class Version:
     def __init__(self, id: int, parent_id: int, state: State) -> None:
