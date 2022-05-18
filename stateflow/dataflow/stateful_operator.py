@@ -130,7 +130,7 @@ class StatefulOperator(Operator):
             version = store.get_version_for_event_id(event.event_id)
             write_set = event.payload["write_set"]
             version.set_write_set(write_set)
-            store.set_version(version.id, version)
+            store.update_version(version)
             store.commit_version(version.id)
             return self.serializer.serialize_store(store)
 
@@ -188,8 +188,7 @@ class StatefulOperator(Operator):
         if updated_state is None:
             yield event
             return None
-        version.set_state(updated_state)
-        store.set_version(version.id, version)
+        store.update_version(version, updated_state)
 
         flow_graph: EventFlowGraph = event.payload.get("flow", None)
         if flow_graph is not None and isinstance(flow_graph.current_node, ReturnNode):

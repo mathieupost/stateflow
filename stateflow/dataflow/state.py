@@ -155,7 +155,7 @@ class Store:
             self.last_committed_version_id: int = 0
             self.event_version_map: Dict[str, int] = dict()
             initial_version = Version(0, -1, State(initial_state))
-            self.set_version(0, initial_version)
+            self.update_version(initial_version)
             return
 
         self.encoded_versions: Dict[int, bytes] = data["encoded_versions"]
@@ -183,14 +183,16 @@ class Store:
 
         return version
 
-    def set_version(self, id: int, version: Version):
+    def update_version(self, version: Version, updated_state: State = None):
         """Encodes and sets the given version.
 
         :param id: the id of the version to set.
         :param version: the version to set.
         """
+        if updated_state:
+            version.set_state(updated_state)
         encoded_version: bytes = jsonpickle.encode(version)
-        self.encoded_versions[id] = encoded_version
+        self.encoded_versions[version.id] = encoded_version
 
     def get_version(self, id: int) -> Version:
         """Gets the encoded version with the given id and decodes it into a
