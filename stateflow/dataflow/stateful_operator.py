@@ -200,8 +200,11 @@ class StatefulOperator(Operator):
             for address in write_set.iterate_addresses():
                 if address == current_address:
                     continue
-                yield Event(event.event_id, address, EventType.Request.CommitState,
-                            {"write_set": write_set})
+                yield event.copy(
+                    fun_address=address,
+                    event_type=EventType.Request.CommitState,
+                    payload={"write_set": write_set}
+                )
         elif flow_graph is None:
             # If we are not in an EventFlow, we directly commit the version,
             # because we don't need to wait for other operators to commit.
