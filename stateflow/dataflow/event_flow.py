@@ -247,7 +247,7 @@ class EventFlowGraph:
 
     def __init__(self, current_node: EventFlowNode, graph: List[EventFlowNode]):
         self.current_node: EventFlowNode = current_node
-        self.graph: EventFlowGraph = graph
+        self.graph: List[EventFlowNode] = graph
 
         self.id_to_node: Dict[str, EventFlowNode] = {
             str(node.id): node for node in graph
