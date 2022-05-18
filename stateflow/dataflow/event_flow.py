@@ -343,6 +343,12 @@ class EventFlowGraph:
 
         return flow_graph
 
+    def reset(self):
+        self.current_node = self.graph[0]
+        for node in self.graph:
+            node.status = "PENDING"
+        self.step()
+
     def to_dict(self):
         return_dict = {}
         return_dict["current"] = self.current_node.id
