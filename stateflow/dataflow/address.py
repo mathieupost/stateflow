@@ -87,5 +87,5 @@ class FunctionAddress:
 
         return self.key == other.key and self.function_type == other.function_type
 
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         return f"{self.function_type}({self.key})"
