@@ -188,12 +188,12 @@ class StatefulOperator(Operator):
         if updated_state is None:
             yield event
             return None
-        store.update_version(version, updated_state)
 
         flow_graph: EventFlowGraph = event.payload.get("flow", None)
         if flow_graph is not None and isinstance(flow_graph.current_node, ReturnNode):
             # If the current node in the return event is a ReturnNode, directly
             # commit the version of this operator.
+            version.set_write_set(write_set)
             store.commit_version(version.id)
             # And yield CommitState events for all other involved operators.
             for address in write_set.iterate_addresses():
@@ -211,6 +211,7 @@ class StatefulOperator(Operator):
 
         print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
+        store.update_version(version, updated_state)
         yield event
         return self.serializer.serialize_store(store)
 
