@@ -158,6 +158,7 @@ class StatefulOperator(Operator):
                 parent_write_set = store.get_version(version.parent_id).write_set or WriteSet()
                 # - loop over all addresses in the write_set to check if they
                 #   are consistent with the parent_write_set.
+                is_consistent = True
                 for ns, o, k, min_parent_version in parent_write_set.iterate():
                     if write_set.exists(ns, o, k):
                         # If the operator is in the write_set, it is used in
@@ -169,11 +170,18 @@ class StatefulOperator(Operator):
                         # newer version.
                         parent_version = last_write_set.get(ns, o, k)
                         if parent_version < min_parent_version:
-                            print(f"Outdated version for {ns}:{o}:{k} ({parent_version} < {min_parent_version})")
-                            pass # TODO: restart the flow
+                            print(f"Inconsistent version for {ns}:{o}:{k} ({parent_version} < {min_parent_version})")
+                            is_consistent = False
                     # - update the last_write_set to include the other operators
                     last_write_set.add(ns, o, k, min_parent_version)
                 event.payload["last_write_set"] = last_write_set
+                # - if the version is inconsistent with previous operator
+                #   versions, we need to restart the flow.
+                if not is_consistent:
+                    flow_graph.reset()
+                    del event.payload["write_set"]
+                    yield event
+                    return serialized_state
             else:
                 # If the current operator is in the write set, we need to
                 # get the version for this event flow.
