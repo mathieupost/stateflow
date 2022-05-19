@@ -1,19 +1,14 @@
-from stateflow.dataflow.dataflow import Operator, Edge, FunctionType, EventType
+from typing import Generator, List, NewType, Optional, Tuple
+
 from stateflow.dataflow.address import FunctionAddress
+from stateflow.dataflow.dataflow import Edge, EventType, FunctionType, Operator
 from stateflow.dataflow.event import Event
-from stateflow.dataflow.event_flow import (
-    ReturnNode,
-    EventFlowGraph,
-)
-from stateflow.dataflow.state import State, Store, Version, WriteSet
-from stateflow.wrappers.class_wrapper import (
-    ClassWrapper,
-    InvocationResult,
-    FailedInvocation,
-)
+from stateflow.dataflow.event_flow import EventFlowGraph, ReturnNode
+from stateflow.dataflow.state import State, Store, WriteSet
+from stateflow.serialization.pickle_serializer import PickleSerializer, SerDe
+from stateflow.wrappers.class_wrapper import (ClassWrapper, FailedInvocation,
+                                              InvocationResult)
 from stateflow.wrappers.meta_wrapper import MetaWrapper
-from typing import Generator, Iterator, NewType, List, Tuple, Optional
-from stateflow.serialization.pickle_serializer import SerDe, PickleSerializer
 
 NoType = NewType("NoType", None)
 
