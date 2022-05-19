@@ -31,6 +31,17 @@ class User:
     def update_balance(self, x: int):
         self.balance += x
 
+    def transfer_balance(self, receiver: "User", amount: int) -> bool:
+        if amount < 0:
+            return False
+
+        if self.balance < amount:
+            return False
+
+        self.update_balance(-amount)
+        receiver.update_balance(amount)
+        return True
+
     def buy_item(self, amount: int, item: Item) -> bool:
         total_price = amount * item.price
 
