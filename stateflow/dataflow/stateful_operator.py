@@ -1,4 +1,4 @@
-from typing import Generator, List, NewType, Optional, Tuple
+from typing import Generator, Iterator, List, NewType, Optional, Tuple
 
 from stateflow.dataflow.address import FunctionAddress
 from stateflow.dataflow.dataflow import Edge, EventType, FunctionType, Operator
@@ -89,8 +89,6 @@ class StatefulOperator(Operator):
             return self._handle_update_state(event, state)
         elif event_type == EventType.Request.FindClass:
             return self._handle_find_class(event, state)
-        elif event_type == EventType.Request.EventFlow:
-            return self._handle_event_flow(event, state)
         else:
             raise AttributeError(f"Unknown event type: {event_type}.")
 
@@ -129,60 +127,11 @@ class StatefulOperator(Operator):
             store.commit_version(version.id)
             return self.serializer.serialize_store(store)
 
-        is_flow = event.event_type == EventType.Request.EventFlow
-        if is_flow:
-            flow_graph: EventFlowGraph = event.payload["flow"]
-            current_address: FunctionAddress = flow_graph.current_node.fun_addr
+        if event.event_type == EventType.Request.EventFlow:
+            yield from self._handle_event_flow(event, store)
+            return self.serializer.serialize_store(store)
 
-            write_set: WriteSet = event.payload.get("write_set", WriteSet())
-            last_write_set: WriteSet = event.payload.get("last_write_set", WriteSet())
-            if not write_set.address_exists(current_address):
-                # If the current operator is not in the write_set, it is not
-                # yet used in the event flow and we need to:
-                # - check if a minimum version is set in the last_write_set
-                min_parent_id = last_write_set.get_address(current_address)
-                # - create a new version
-                version = store.create_version_for_event_id(event.event_id, min_parent_id)
-                # - add it to the write_set
-                write_set.add_address(current_address, version.id)
-                last_write_set.add_address(current_address, version.parent_id)
-                # - add the write_set to the event
-                event.payload["write_set"] = write_set
-                # - check if parent_write_set has newer versions of operators
-                #   that are in the write_set and last_write_set.
-                parent_write_set = store.get_version(version.parent_id).write_set or WriteSet()
-                # - loop over all addresses in the write_set to check if they
-                #   are consistent with the parent_write_set.
-                is_consistent = True
-                for ns, o, k, min_parent_version in parent_write_set.iterate():
-                    if write_set.exists(ns, o, k):
-                        # If the operator is in the write_set, it is used in
-                        # this flow. So, we need to make sure that the version
-                        # of the operator is at least as high as the minimum
-                        # version in the parent_write_set. If it is lower, then
-                        # we know that a newer version existed before the flow
-                        # started, and we should restart the flow to use the
-                        # newer version.
-                        parent_version = last_write_set.get(ns, o, k)
-                        if parent_version < min_parent_version:
-                            print(f"Inconsistent version for {ns}:{o}:{k} ({parent_version} < {min_parent_version})")
-                            is_consistent = False
-                    # - update the last_write_set to include the other operators
-                    last_write_set.add(ns, o, k, min_parent_version)
-                event.payload["last_write_set"] = last_write_set
-                # - if the version is inconsistent with previous operator
-                #   versions, we need to restart the flow.
-                if not is_consistent:
-                    flow_graph.reset()
-                    del event.payload["write_set"]
-                    yield event
-                    return serialized_state
-            else:
-                # If the current operator is in the write set, we need to
-                # get the version for this event flow.
-                version = store.get_version_for_event_id(event.event_id)
-        else:
-            version = store.create_version()
+        version = store.create_version()
 
         # We dispatch the event to find the correct execution method.
         event, updated_state = self._dispatch_event(
@@ -192,29 +141,13 @@ class StatefulOperator(Operator):
             yield event
             return None
 
-        flow_graph: EventFlowGraph = event.payload.get("flow", None)
-        if flow_graph is not None and isinstance(flow_graph.current_node, ReturnNode):
-            # If the current node in the return event is a ReturnNode, directly
-            # commit the version of this operator.
-            version.set_write_set(write_set)
-            store.commit_version(version.id)
-            # And yield CommitState events for all other involved operators.
-            for address in write_set.iterate_addresses():
-                if address == current_address:
-                    continue
-                yield event.copy(
-                    fun_address=address,
-                    event_type=EventType.Request.CommitState,
-                    payload={"write_set": write_set}
-                )
-        elif flow_graph is None:
-            # If we are not in an EventFlow, we directly commit the version,
-            # because we don't need to wait for other operators to commit.
-            store.commit_version(version.id)
-
         print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
         store.update_version(version, updated_state)
+        # Since we are not in an EventFlow, we directly commit the version,
+        # because we don't need to wait for other operators to commit.
+        store.commit_version(version.id)
+
         yield event
         return self.serializer.serialize_store(store)
 
@@ -342,11 +275,60 @@ class StatefulOperator(Operator):
                 invocation.updated_state,
             )
 
-    def _handle_event_flow(self, event: Event, state: State) -> Tuple[Event, State]:
+    def _handle_event_flow(self, event: Event, store: Store) -> Iterator[Event]:
         flow_graph: EventFlowGraph = event.payload["flow"]
         current_address: FunctionAddress = flow_graph.current_node.fun_addr
 
-        updated_state, instance = flow_graph.step(self.class_wrapper, state)
+        write_set: WriteSet = event.payload.get("write_set", WriteSet())
+        last_write_set: WriteSet = event.payload.get("last_write_set", WriteSet())
+        if not write_set.address_exists(current_address):
+            # If the current operator is not in the write_set, it is not
+            # yet used in the event flow and we need to:
+            # - check if a minimum version is set in the last_write_set
+            min_parent_id = last_write_set.get_address(current_address)
+            # - create a new version
+            version = store.create_version_for_event_id(event.event_id, min_parent_id)
+            # - add it to the write_set
+            write_set.add_address(current_address, version.id)
+            last_write_set.add_address(current_address, version.parent_id)
+            # - add the write_set to the event
+            event.payload["write_set"] = write_set
+            # - check if parent_write_set has newer versions of operators
+            #   that are in the write_set and last_write_set.
+            parent_write_set = store.get_version(version.parent_id).write_set or WriteSet()
+            # - loop over all addresses in the write_set to check if they
+            #   are consistent with the parent_write_set.
+            is_consistent = True
+            for ns, o, k, min_parent_version in parent_write_set.iterate():
+                if write_set.exists(ns, o, k):
+                    # If the operator is in the write_set, it is used in
+                    # this flow. So, we need to make sure that the version
+                    # of the operator is at least as high as the minimum
+                    # version in the parent_write_set. If it is lower, then
+                    # we know that a newer version existed before the flow
+                    # started, and we should restart the flow to use the
+                    # newer version.
+                    parent_version = last_write_set.get(ns, o, k)
+                    if parent_version < min_parent_version:
+                        print(f"Inconsistent version for {ns}:{o}:{k} ({parent_version} < {min_parent_version})")
+                        is_consistent = False
+                # - update the last_write_set to include the other operators
+                last_write_set.add(ns, o, k, min_parent_version)
+            event.payload["last_write_set"] = last_write_set
+            # - if the version is inconsistent with previous operator
+            #   versions, we need to restart the flow.
+            if not is_consistent:
+                flow_graph.reset()
+                del event.payload["write_set"]
+                print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
+                yield event
+                return
+        else:
+            # If the current operator is in the write set, we need to
+            # get the version for this event flow.
+            version = store.get_version_for_event_id(event.event_id)
+
+        updated_state, instance = flow_graph.step(self.class_wrapper, version.state)
 
         # Keep stepping :)
         while flow_graph.current_node.fun_addr == current_address:
@@ -357,15 +339,27 @@ class StatefulOperator(Operator):
             ):
                 break
 
-            # print(
-            #     f"Stepping again {flow_graph.current_node.typ} and {flow_graph.current_node.to_dict()}"
-            # )
             updated_state, _ = flow_graph.step(
                 self.class_wrapper, updated_state, instance
             )
 
-        # print(
-        #     f"Now going to {flow_graph.current_node.fun_addr.to_dict()} {flow_graph.current_node.typ}"
-        # )
+        version.set_write_set(write_set)
+        store.update_version(version, updated_state)
 
-        return event, updated_state
+        if isinstance(flow_graph.current_node, ReturnNode):
+            # If the current node in the return event is a ReturnNode, directly
+            # commit the version of this operator.
+            store.commit_version(version.id)
+            # And yield CommitState events for all other involved operators.
+            for address in write_set.iterate_addresses():
+                if address == current_address:
+                    continue
+                yield event.copy(
+                    fun_address=address,
+                    event_type=EventType.Request.CommitState,
+                    payload={"write_set": write_set}
+                )
+
+        print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
+        yield event
+        return
