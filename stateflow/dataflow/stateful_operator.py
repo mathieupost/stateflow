@@ -1,4 +1,5 @@
-from typing import Generator, Iterator, List, NewType, Optional, Tuple
+from functools import wraps
+from typing import Generator, Iterator, List, NewType, Optional, Tuple, TypeVar
 
 from stateflow.dataflow.address import FunctionAddress
 from stateflow.dataflow.dataflow import Edge, EventType, FunctionType, Operator
@@ -12,18 +13,33 @@ from stateflow.wrappers.meta_wrapper import MetaWrapper
 
 NoType = NewType("NoType", None)
 
+YT = TypeVar("YT") # YieldType
+ST = TypeVar("ST") # SendType
+RT = TypeVar("RT") # ReturnType
 
-class StatefulGenerator:
+class WrappedGenerator(Generator[YT, ST, RT]):
     """Wraps a generator function to retain its return value.
-    
+
     This makes it possible to yield values in a generator function, while also
     storing the final return value for later use."""
-    def __init__(self, gen):
+    def __init__(self, gen: Generator[YT, ST, RT]):
         self.gen = gen
 
-    def __iter__(self):
-        self.state = yield from self.gen
+    def __iter__(self) -> Generator[YT, ST, RT]:
+        self.return_value = yield from self.gen
+        return self.return_value
 
+    def send(self, value: ST) -> YT:
+        return self.gen.send(value)
+
+    def throw(self, typ, val=None, tb=None) -> YT:
+        return self.gen.throw(typ, val, tb)
+
+def keep_return_value(f):
+    @wraps(f)
+    def g(*args, **kwargs):
+        return WrappedGenerator(f(*args, **kwargs))
+    return g
 
 class StatefulOperator(Operator):
     def __init__(
@@ -92,7 +108,8 @@ class StatefulOperator(Operator):
         else:
             raise AttributeError(f"Unknown event type: {event_type}.")
 
-    def handle(self, event: Event, serialized_state: Optional[bytes]) -> Generator[Event, None, Optional[bytes]]:
+    @keep_return_value
+    def handle(self, event: Event, serialized_state: Optional[bytes]) -> WrappedGenerator[Event, None, Optional[bytes]]:
         """Handles incoming event and current state.
 
         Depending on the event type, a method is executed or a instance is created, or state is updated, etc.

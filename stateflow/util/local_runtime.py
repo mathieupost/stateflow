@@ -7,8 +7,7 @@ from stateflow.client.stateflow_client import (StateflowClient,
 from stateflow.dataflow.dataflow import (Dataflow, EgressRouter, EventType,
                                          IngressRouter, Route, RouteDirection)
 from stateflow.dataflow.event import Event
-from stateflow.dataflow.stateful_operator import (StatefulGenerator,
-                                                  StatefulOperator)
+from stateflow.dataflow.stateful_operator import StatefulOperator
 from stateflow.serialization.pickle_serializer import PickleSerializer, SerDe
 
 
@@ -58,10 +57,10 @@ class LocalRuntime(StateflowClient):
             full_key: str = f"{operator_name}_{route.key}"
             operator_state = self.state.get(full_key)
 
-            handler = StatefulGenerator(operator.handle(event, operator_state))
+            handler = operator.handle(event, operator_state)
             yield from handler
 
-            self.state[full_key] = handler.state
+            self.state[full_key] = handler.return_value
 
     def handle_invocation(self, event: Event) -> Iterator[Route]:
         route: Route = self.ingress_router.route(event)

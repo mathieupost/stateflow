@@ -8,7 +8,7 @@ from apache_beam.options.pipeline_options import PipelineOptions
 from beam_nuggets.io import kafkaio
 
 from stateflow.runtime.KafkaConsumer import KafkaConsume, KafkaProduce
-from stateflow.dataflow.stateful_operator import StatefulGenerator, StatefulOperator, Operator
+from stateflow.dataflow.stateful_operator import StatefulOperator, Operator
 from typing import List, Tuple, Any, Union
 from stateflow.serialization.json_serde import JsonSerializer, SerDe
 from stateflow.runtime.runtime import Runtime
@@ -19,7 +19,7 @@ from stateflow.dataflow.dataflow import (
     RouteDirection,
     EgressRouter,
 )
-from stateflow.dataflow.event import EventType
+from stateflow.dataflow.event import Event, EventType
 from apache_beam import pvalue
 from apache_beam.testing.test_pipeline import TestPipeline
 
@@ -85,7 +85,8 @@ class BeamOperator(DoFn):
         self, element: Tuple[str, Any], operator_state=DoFn.StateParam(STATE_SPEC)
     ) -> Tuple[str, Any]:
         original_state = operator_state.read()
-        handler = StatefulGenerator(self.operator.handle(element[1], original_state))
+        event: Event = element[1]
+        handler = self.operator.handle(event, original_state)
 
         for event in handler:
             route = self.router.route_and_serialize(event)
@@ -98,7 +99,7 @@ class BeamOperator(DoFn):
                 raise AttributeError(f"Unknown route direction {route.direction}.")
 
         # Update state.
-        updated_state = handler.state
+        updated_state = handler.return_value
         if updated_state and updated_state is not original_state:
             operator_state.write(updated_state)
 

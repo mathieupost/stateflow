@@ -6,8 +6,7 @@ from stateflow.dataflow.address import FunctionAddress, FunctionType
 from stateflow.dataflow.args import Arguments
 from stateflow.dataflow.event import Event, EventType
 from stateflow.dataflow.state import State
-from stateflow.dataflow.stateful_operator import (StatefulGenerator,
-                                                  StatefulOperator)
+from stateflow.dataflow.stateful_operator import StatefulOperator
 from stateflow.serialization.json_serde import JsonSerializer
 from tests.common.common_classes import stateflow
 from tests.context import stateflow
@@ -57,13 +56,13 @@ class TestStatefulOperator:
         )
 
         intermediate_event = operator.handle_create(event)
-        handler = StatefulGenerator(operator.handle(intermediate_event, None))
+        handler = operator.handle(intermediate_event, None)
         events = list(handler)
         
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.SuccessfulCreateClass
         assert events[0].payload["key"] == "wouter"
-        assert handler.state is not None
+        assert handler.return_value is not None
 
     def test_handle_init_class_negative(self, setup):
         operator: StatefulOperator = setup[0]
@@ -77,13 +76,13 @@ class TestStatefulOperator:
         )
 
         intermediate_event = operator.handle_create(event)
-        handler = StatefulGenerator(operator.handle(intermediate_event,  "non_empty_state"))
+        handler = operator.handle(intermediate_event,  "non_empty_state")
         events = list(handler)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.FailedInvocation
         assert events[0].payload["error_message"]
-        assert handler.state == "non_empty_state"
+        assert handler.return_value == "non_empty_state"
 
     def test_invoke_stateful_positive(self, setup):
         operator: StatefulOperator = setup[0]
@@ -97,11 +96,9 @@ class TestStatefulOperator:
         )
 
         state = State({"username": "wouter", "balance": 10, "items": []})
-        handler = StatefulGenerator(operator.handle(
-            event, state_to_serialized_store(state)
-        ))
+        handler = operator.handle(event, state_to_serialized_store(state))
         events = list(handler)
-        updated_state = serialized_store_to_state(handler.state)
+        updated_state = serialized_store_to_state(handler.return_value)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.SuccessfulInvocation
@@ -120,11 +117,9 @@ class TestStatefulOperator:
         )
 
         state = State({"username": "wouter", "balance": 10, "items": []})
-        handler = StatefulGenerator(operator.handle(
-            event, state_to_serialized_store(state)
-        ))
+        handler = operator.handle(event, state_to_serialized_store(state))
         events = list(handler)
-        updated_state = serialized_store_to_state(handler.state)
+        updated_state = serialized_store_to_state(handler.return_value)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.FailedInvocation
@@ -142,11 +137,9 @@ class TestStatefulOperator:
         )
 
         state = State({"username": "wouter", "balance": 11, "items": []})
-        handler = StatefulGenerator(operator.handle(
-            event, state_to_serialized_store(state)
-        ))
+        handler = operator.handle(event, state_to_serialized_store(state))
         events = list(handler)
-        updated_state = serialized_store_to_state(handler.state)
+        updated_state = serialized_store_to_state(handler.return_value)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.SuccessfulStateRequest
@@ -165,11 +158,9 @@ class TestStatefulOperator:
         )
 
         state = State({"username": "wouter", "balance": 11, "items": []})
-        handler = StatefulGenerator(operator.handle(
-            event, state_to_serialized_store(state)
-        ))
+        handler = operator.handle(event, state_to_serialized_store(state))
         events = list(handler)
-        updated_state = serialized_store_to_state(handler.state)
+        updated_state = serialized_store_to_state(handler.return_value)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.SuccessfulStateRequest
@@ -189,11 +180,9 @@ class TestStatefulOperator:
         )
 
         state = State({"username": "wouter", "balance": 11, "items": []})
-        handler = StatefulGenerator(operator.handle(
-            event, state_to_serialized_store(state)
-        ))
+        handler = operator.handle(event, state_to_serialized_store(state))
         events = list(handler)
-        updated_state = serialized_store_to_state(handler.state)
+        updated_state = serialized_store_to_state(handler.return_value)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.FoundClass
@@ -211,9 +200,9 @@ class TestStatefulOperator:
             {"args": Arguments({"x": "100"}), "method_name": "update_balance"},
         )
 
-        handler = StatefulGenerator(operator.handle(event, None))
+        handler = operator.handle(event, None)
         events = list(handler)
 
         assert len(events) == 1
         assert events[0].event_type == EventType.Reply.KeyNotFound
-        assert handler.state is None
+        assert handler.return_value is None

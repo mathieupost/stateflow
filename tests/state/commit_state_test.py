@@ -9,7 +9,7 @@ from stateflow.dataflow.dataflow import Dataflow, EgressRouter, IngressRouter, O
 from stateflow.dataflow.event import Event, EventType
 from stateflow.dataflow.event_flow import (EventFlowGraph, InternalClassRef)
 from stateflow.dataflow.state import Store
-from stateflow.dataflow.stateful_operator import StatefulGenerator, StatefulOperator
+from stateflow.dataflow.stateful_operator import StatefulOperator
 from stateflow.descriptors.class_descriptor import ClassDescriptor
 from stateflow.serialization.json_serde import JsonSerializer
 from tests.common.common_classes import stateflow
@@ -24,11 +24,10 @@ class TestCommitState:
 
         route = ingress.route(event)
         serialized_store = model.get_serialized_store()
-        handler = StatefulGenerator(
-            operator.handle(route.value, serialized_store))
+        handler = operator.handle(route.value, serialized_store)
 
         events = list(handler)
-        model.update_store(handler.state)
+        model.update_store(handler.return_value)
 
         if len(events) == 0:
             return events
