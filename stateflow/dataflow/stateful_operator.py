@@ -46,7 +46,6 @@ class StatefulOperator(Operator):
         args = event.payload["args"]
         res: InvocationResult = self.class_wrapper.init_class(args)
 
-        print(f"handle_create, {res}")
         key: str = res.return_results[0]
         created_state: State = res.updated_state
 
@@ -91,7 +90,6 @@ class StatefulOperator(Operator):
         :param serialized_state: the incoming state (in bytes). If this is None, we assume this 'key' does not exist.
         :return: a generator that yields outgoing events and returns the updated state (in bytes).
         """
-        print("event", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
         if event.event_type == EventType.Request.InitClass:
             event, updated_state = self._handle_create_with_state(event, serialized_state)
@@ -131,7 +129,6 @@ class StatefulOperator(Operator):
             yield event
             return None
 
-        print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
 
         store.update_version(version, updated_state)
         # Since we are not in an EventFlow, we directly commit the version,
@@ -310,7 +307,6 @@ class StatefulOperator(Operator):
             if not is_consistent:
                 flow_graph.reset()
                 del event.payload["write_set"]
-                print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
                 yield event
                 return
         else:
@@ -350,6 +346,5 @@ class StatefulOperator(Operator):
                     payload={"write_set": write_set}
                 )
 
-        print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
         yield event
         return
