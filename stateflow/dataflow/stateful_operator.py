@@ -58,9 +58,7 @@ class StatefulOperator(Operator):
 
         return event
 
-    def _dispatch_event(
-        self, event_type: EventType, event: Event, state: State
-    ) -> Tuple[Event, State]:
+    def _dispatch_event(self, event: Event, store: Store) -> Iterator[Event]:
         """Dispatches an event to the correct method to execute/handle it.
 
         :param event_type: the event_type to find the correct handle.
@@ -69,16 +67,36 @@ class StatefulOperator(Operator):
         :return: a tuple of outgoing event + updated state.
         """
 
+        event_type = event.event_type
+
+        if event_type == EventType.Request.CommitState:
+            self._handle_commit_state(event, store)
+            return
+
+        if event_type == EventType.Request.EventFlow:
+            yield from self._handle_event_flow(event, store)
+            return
+
+        version = store.create_version()
+        state = version.state
         if event_type == EventType.Request.InvokeStateful:
-            return self._handle_invoke_stateful(event, state)
+            event, state = self._handle_invoke_stateful(event, state)
         elif event_type == EventType.Request.GetState:
-            return self._handle_get_state(event, state)
+            event, state = self._handle_get_state(event, state)
         elif event_type == EventType.Request.UpdateState:
-            return self._handle_update_state(event, state)
+            event, state = self._handle_update_state(event, state)
         elif event_type == EventType.Request.FindClass:
-            return self._handle_find_class(event, state)
+            event, state = self._handle_find_class(event, state)
         else:
             raise AttributeError(f"Unknown event type: {event_type}.")
+
+        if state is not None:
+            store.update_version(version, state)
+            # Since we are not in an EventFlow, we directly commit the version,
+            # because we don't need to wait for other operators to commit.
+            store.commit_version(version.id)
+
+        yield event
 
     @keep_return_value
     def handle(self, event: Event, serialized_state: Optional[bytes]) -> WrappedGenerator[Event, None, Optional[bytes]]:
@@ -107,35 +125,9 @@ class StatefulOperator(Operator):
             )
             return serialized_state
 
-        if event.event_type == EventType.Request.CommitState:
-            version = store.get_version_for_event_id(event.event_id)
-            write_set = event.payload["write_set"]
-            version.set_write_set(write_set)
-            store.update_version(version)
-            store.commit_version(version.id)
-            return self.serializer.serialize_store(store)
-
-        if event.event_type == EventType.Request.EventFlow:
-            yield from self._handle_event_flow(event, store)
-            return self.serializer.serialize_store(store)
-
-        version = store.create_version()
-
         # We dispatch the event to find the correct execution method.
-        event, updated_state = self._dispatch_event(
-            event.event_type, event, version.state
-        )
-        if updated_state is None:
-            yield event
-            return None
+        yield from self._dispatch_event(event, store)
 
-
-        store.update_version(version, updated_state)
-        # Since we are not in an EventFlow, we directly commit the version,
-        # because we don't need to wait for other operators to commit.
-        store.commit_version(version.id)
-
-        yield event
         return self.serializer.serialize_store(store)
 
     def _handle_create_with_state(
@@ -261,6 +253,13 @@ class StatefulOperator(Operator):
                 ),
                 invocation.updated_state,
             )
+
+    def _handle_commit_state(self, event: Event, store: Store) -> None:
+        version = store.get_version_for_event_id(event.event_id)
+        write_set = event.payload["write_set"]
+        version.set_write_set(write_set)
+        store.update_version(version)
+        store.commit_version(version.id)
 
     def _handle_event_flow(self, event: Event, store: Store) -> Iterator[Event]:
         flow_graph: EventFlowGraph = event.payload["flow"]
