@@ -1,5 +1,4 @@
-from functools import wraps
-from typing import Generator, Iterator, List, NewType, Optional, Tuple, TypeVar
+from typing import Iterator, List, NewType, Optional, Tuple
 
 from stateflow.dataflow.address import FunctionAddress
 from stateflow.dataflow.dataflow import Edge, EventType, FunctionType, Operator
@@ -7,39 +6,13 @@ from stateflow.dataflow.event import Event
 from stateflow.dataflow.event_flow import EventFlowGraph, ReturnNode
 from stateflow.dataflow.state import State, Store, WriteSet
 from stateflow.serialization.pickle_serializer import PickleSerializer, SerDe
+from stateflow.util.generator_wrapper import WrappedGenerator, keep_return_value
 from stateflow.wrappers.class_wrapper import (ClassWrapper, FailedInvocation,
                                               InvocationResult)
 from stateflow.wrappers.meta_wrapper import MetaWrapper
 
 NoType = NewType("NoType", None)
 
-YT = TypeVar("YT") # YieldType
-ST = TypeVar("ST") # SendType
-RT = TypeVar("RT") # ReturnType
-
-class WrappedGenerator(Generator[YT, ST, RT]):
-    """Wraps a generator function to retain its return value.
-
-    This makes it possible to yield values in a generator function, while also
-    storing the final return value for later use."""
-    def __init__(self, gen: Generator[YT, ST, RT]):
-        self.gen = gen
-
-    def __iter__(self) -> Generator[YT, ST, RT]:
-        self.return_value = yield from self.gen
-        return self.return_value
-
-    def send(self, value: ST) -> YT:
-        return self.gen.send(value)
-
-    def throw(self, typ, val=None, tb=None) -> YT:
-        return self.gen.throw(typ, val, tb)
-
-def keep_return_value(f):
-    @wraps(f)
-    def g(*args, **kwargs):
-        return WrappedGenerator(f(*args, **kwargs))
-    return g
 
 class StatefulOperator(Operator):
     def __init__(
