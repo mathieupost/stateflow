@@ -27,7 +27,8 @@ class TestCommitState:
         handler = operator.handle(route.value, serialized_store)
 
         events = list(handler)
-        model.update_store(handler.return_value)
+        if handler.return_value is not None:
+            model.update_store(handler.return_value)
 
         if len(events) == 0:
             return events
