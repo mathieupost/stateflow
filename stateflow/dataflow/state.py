@@ -9,7 +9,7 @@ class State:
 
     def __init__(self, data: dict, version_id: int = 0):
         if isinstance(data, State):
-            data = data._data
+            self.__init__(data._data, version_id)
         self._data = data
         self._version_id = version_id
 
