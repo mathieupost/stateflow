@@ -33,7 +33,7 @@ class State:
 
     def copy_with_version_id(self, version_id) -> "State":
         """Copies the state, but overwrites the version_id attribute."""
-        return State(self._data, version_id)
+        return State(self._data.copy(), version_id)
 
 
 class WriteSet(dict):
