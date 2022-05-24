@@ -68,35 +68,20 @@ class StatefulOperator(Operator):
         """
 
         event_type = event.event_type
-
-        if event_type == EventType.Request.CommitState:
-            self._handle_commit_state(event, store)
-            return
-
-        if event_type == EventType.Request.EventFlow:
-            yield from self._handle_event_flow(event, store)
-            return
-
-        version = store.create_version()
-        state = version.state
-        if event_type == EventType.Request.InvokeStateful:
-            event, state = self._handle_invoke_stateful(event, state)
-        elif event_type == EventType.Request.GetState:
-            event, state = self._handle_get_state(event, state)
-        elif event_type == EventType.Request.UpdateState:
-            event, state = self._handle_update_state(event, state)
+        if event_type == EventType.Request.GetState:
+            yield self._handle_get_state(event, store)
         elif event_type == EventType.Request.FindClass:
-            event, state = self._handle_find_class(event, state)
+            yield self._handle_find_class(event, store)
+        elif event_type == EventType.Request.InvokeStateful:
+            yield self._handle_invoke_stateful(event, store)
+        elif event_type == EventType.Request.UpdateState:
+            yield self._handle_update_state(event, store)
+        elif event_type == EventType.Request.CommitState:
+            self._handle_commit_state(event, store) # Does not emit events
+        elif event_type == EventType.Request.EventFlow:
+            yield from self._handle_event_flow(event, store)
         else:
             raise AttributeError(f"Unknown event type: {event_type}.")
-
-        if state is not None:
-            store.update_version(version, state)
-            # Since we are not in an EventFlow, we directly commit the version,
-            # because we don't need to wait for other operators to commit.
-            store.commit_version(version.id)
-
-        yield event
 
     @keep_return_value
     def handle(self, event: Event, serialized_state: Optional[bytes]) -> WrappedGenerator[Event, None, Optional[bytes]]:
@@ -164,7 +149,7 @@ class StatefulOperator(Operator):
 
         return return_event, self.serializer.serialize_store(new_store)
 
-    def _handle_get_state(self, event: Event, state: State) -> Tuple[Event, State]:
+    def _handle_get_state(self, event: Event, store: Store) -> Event:
         """Gets a field/attribute of the current state.
 
          The incoming event needs to have an 'attribute' field in the payload.
@@ -175,15 +160,14 @@ class StatefulOperator(Operator):
         :param state: the current state.
         :return: a tuple of outgoing event + updated state.
         """
-        return (
-            event.copy(
-                event_type=EventType.Reply.SuccessfulStateRequest,
-                payload={"state": state[event.payload["attribute"]]},
-            ),
-            state,
+        version = store.get_last_committed_version()
+        state = version.state
+        return event.copy(
+            event_type=EventType.Reply.SuccessfulStateRequest,
+            payload={"state": state[event.payload["attribute"]]},
         )
 
-    def _handle_find_class(self, event: Event, state: State) -> Tuple[Event, State]:
+    def _handle_find_class(self, event: Event, store: Store) -> Event:
         """Check if the instance of a class exists.
 
         If this is the case, we simply return with an empty payload and `EventType.Reply.FoundClass`.
@@ -195,9 +179,9 @@ class StatefulOperator(Operator):
         :param state: the current state.
         :return: a tuple of outgoing event + current state.
         """
-        return event.copy(event_type=EventType.Reply.FoundClass, payload={}), state
+        return event.copy(event_type=EventType.Reply.FoundClass, payload={})
 
-    def _handle_update_state(self, event: Event, state: State) -> Tuple[Event, State]:
+    def _handle_update_state(self, event: Event, store: Store) -> Event:
         """Update one attribute of the state.
 
         The incoming event needs to have an 'attribute' field in the payload aswell as 'attribute_value'.
@@ -209,16 +193,19 @@ class StatefulOperator(Operator):
         :param state: the current state.
         :return: a tuple of outgoing event + updated state.
         """
-        state[event.payload["attribute"]] = event.payload["attribute_value"]
+        version = store.create_version()
+        version.state[event.payload["attribute"]] = event.payload["attribute_value"]
         return_event = event.copy(
             event_type=EventType.Reply.SuccessfulStateRequest,
             payload={},
         )
-        return return_event, state
+        store.update_version(version, version.state)
+        store.commit_version(version.id)
+        return return_event
 
     def _handle_invoke_stateful(
-        self, event: Event, state: State
-    ) -> Tuple[Event, State]:
+        self, event: Event, store: Store
+    ) -> Event:
         """Invokes a stateful method.
 
         The incoming event needs to have a `method_name` and `args` in its payload for the invocation.
@@ -233,25 +220,22 @@ class StatefulOperator(Operator):
         :param state: the current state.
         :return: a tuple of outgoing event + updated state.
         """
+        version = store.create_version()
         invocation: InvocationResult = self.class_wrapper.invoke(
-            event.payload["method_name"], state, event.payload["args"]
+            event.payload["method_name"], version.state, event.payload["args"]
         )
 
         if isinstance(invocation, FailedInvocation):
-            return (
-                event.copy(
-                    event_type=EventType.Reply.FailedInvocation,
-                    payload={"error_message": invocation.message},
-                ),
-                state,
+            return event.copy(
+                event_type=EventType.Reply.FailedInvocation,
+                payload={"error_message": invocation.message},
             )
         else:
-            return (
-                event.copy(
-                    event_type=EventType.Reply.SuccessfulInvocation,
-                    payload={"return_results": invocation.return_results},
-                ),
-                invocation.updated_state,
+            store.update_version(version, invocation.updated_state)
+            store.commit_version(version.id)
+            return event.copy(
+                event_type=EventType.Reply.SuccessfulInvocation,
+                payload={"return_results": invocation.return_results},
             )
 
     def _handle_commit_state(self, event: Event, store: Store) -> None:
