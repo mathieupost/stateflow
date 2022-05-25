@@ -86,9 +86,11 @@ class BeamOperator(DoFn):
     ) -> Tuple[str, Any]:
         original_state = operator_state.read()
         event: Event = element[1]
+        print("event", event.event_id[:8], event.fun_address, event.event_type, event.payload)
         handler = self.operator.handle(event, original_state)
 
         for event in handler:
+            print("return", event.event_id[:8], event.fun_address, event.event_type, event.payload)
             route = self.router.route_and_serialize(event)
 
             if route.direction == RouteDirection.CLIENT:
