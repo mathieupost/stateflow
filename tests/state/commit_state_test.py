@@ -7,7 +7,7 @@ from stateflow.dataflow.address import FunctionAddress, FunctionType
 from stateflow.dataflow.args import Arguments
 from stateflow.dataflow.dataflow import Dataflow, EgressRouter, IngressRouter, Operator
 from stateflow.dataflow.event import Event, EventType
-from stateflow.dataflow.event_flow import (EventFlowGraph, InternalClassRef)
+from stateflow.dataflow.event_flow import EventFlowGraph, InternalClassRef
 from stateflow.dataflow.state import Store
 from stateflow.dataflow.stateful_operator import StatefulOperator
 from stateflow.descriptors.class_descriptor import ClassDescriptor
@@ -39,7 +39,9 @@ class TestCommitState:
 
         return events
 
-    def test_commit_state(self, sender: "Model", receiver: "Model", transfer_balance_event1):
+    def test_commit_state(
+        self, sender: "Model", receiver: "Model", transfer_balance_event1
+    ):
         initial_state_sndr = sender.store.get_last_committed_version().state.get()
         initial_state_rcvr = receiver.store.get_last_committed_version().state.get()
 
@@ -47,13 +49,21 @@ class TestCommitState:
         events = self.step(sender, transfer_balance_event1)
         assert len(events) == 1
         assert events[0].event_type == EventType.Request.EventFlow
-        expected_write_set_1 = {"global": {"User": {
-            "sender": 1,
-        }}}
+        expected_write_set_1 = {
+            "global": {
+                "User": {
+                    "sender": 1,
+                }
+            }
+        }
         assert events[0].payload["write_set"] == expected_write_set_1
-        expected_last_write_set_1 = {"global": {"User": {
-            "sender": 0,
-        }}}
+        expected_last_write_set_1 = {
+            "global": {
+                "User": {
+                    "sender": 0,
+                }
+            }
+        }
         assert events[0].payload["last_write_set"] == expected_last_write_set_1
         assert sender.store.last_committed_version_id == 0
 
@@ -61,15 +71,23 @@ class TestCommitState:
         events = self.step(receiver, events[0])
         assert len(events) == 1
         assert events[0].event_type == EventType.Request.EventFlow
-        expected_write_set_2 = {"global": {"User": {
-            "sender": 1,
-            "receiver": 1,
-        }}}
+        expected_write_set_2 = {
+            "global": {
+                "User": {
+                    "sender": 1,
+                    "receiver": 1,
+                }
+            }
+        }
         assert events[0].payload["write_set"] == expected_write_set_2
-        expected_last_write_set_2 = {"global": {"User": {
-            "sender": 0,
-            "receiver": 0,
-        }}}
+        expected_last_write_set_2 = {
+            "global": {
+                "User": {
+                    "sender": 0,
+                    "receiver": 0,
+                }
+            }
+        }
         assert events[0].payload["last_write_set"] == expected_last_write_set_2
         assert receiver.store.last_committed_version_id == 0
         updated_state = receiver.get_state(events[0])
@@ -97,7 +115,13 @@ class TestCommitState:
         user_write_set = receiver.store.get_last_committed_version().write_set
         assert item_write_set == user_write_set
 
-    def test_commit_state_concurrent(self, sender: "Model", receiver: "Model", transfer_balance_event1: Event, transfer_balance_event2: Event):
+    def test_commit_state_concurrent(
+        self,
+        sender: "Model",
+        receiver: "Model",
+        transfer_balance_event1: Event,
+        transfer_balance_event2: Event,
+    ):
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
         tr1_events = self.step(sender, transfer_balance_event1)
@@ -107,7 +131,7 @@ class TestCommitState:
         tr1_events = self.step(sender, tr1_events[0])
 
         ########## Begin 2nd transaction ##########
-        def tr2():
+        if True:  # indented to make it easier to see what happens
             tr2_event_id = transfer_balance_event2.event_id
             # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
             # Gets committed version from 1st transaction.
@@ -116,15 +140,16 @@ class TestCommitState:
             assert sender.store.last_committed_version_id == sndr_version.parent_id
             assert sndr_version.parent_id == 1
             assert sndr_version.id == 2
-            assert tr2_events[0].payload["last_write_set"] == sender.store.get_last_committed_version(
-            ).write_set
+            assert (
+                tr2_events[0].payload["last_write_set"]
+                == sender.store.get_last_committed_version().write_set
+            )
 
             # INVOKE_EXTERNAL User(receiver).update_balance(...)
             # Should get uncommitted (newer) state from 1st transaction, because
             # of detected new version in write_set of the state of item.
             tr2_events = self.step(receiver, tr2_events[0])
-            rcvr_version = receiver.store.get_version_for_event_id(
-                tr2_event_id)
+            rcvr_version = receiver.store.get_version_for_event_id(tr2_event_id)
             assert receiver.store.last_committed_version_id < rcvr_version.parent_id
             assert rcvr_version.parent_id == 1
             assert rcvr_version.id == 2
@@ -133,15 +158,19 @@ class TestCommitState:
             tr2_events = self.step(sender, tr2_events[0])
             # COMMIT_STATE User(receiver)
             _ = self.step(receiver, tr2_events[0])
-
-        tr2()  # indented to make it easier to see what happens
         ########## End 2nd transaction ##########
 
         # COMMIT_STATE User(receiver)
         _ = self.step(receiver, tr1_events[0])
         ########## End 1st transaction ##########
 
-    def test_commit_state_concurrent_reverse(self, sender: "Model", receiver: "Model", transfer_balance_event1: Event, transfer_balance_event_reverse: Event):
+    def test_commit_state_concurrent_reverse(
+        self,
+        sender: "Model",
+        receiver: "Model",
+        transfer_balance_event1: Event,
+        transfer_balance_event_reverse: Event,
+    ):
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
         tr1_events = self.step(sender, transfer_balance_event1)
@@ -151,18 +180,22 @@ class TestCommitState:
         tr1_events = self.step(sender, tr1_events[0])
 
         ########## Begin 2nd transaction ##########
-        def tr2():
+        if True:  # indented to make it easier to see what happens
             tr2_event_id = transfer_balance_event_reverse.event_id
             # INVOKE_SPLIT_FUN User(receiver).transfer_balance_0(...)
             # Does not get committed version from 1st transaction.
             tr2_events = self.step(receiver, transfer_balance_event_reverse)
             rcvr_version = receiver.store.get_version_for_event_id(tr2_event_id)
             assert receiver.store.last_committed_version_id == rcvr_version.parent_id
-            assert rcvr_version.parent_id == 0 # Old version
+            assert rcvr_version.parent_id == 0  # Old version
             assert rcvr_version.id == 2
-            assert tr2_events[0].payload["last_write_set"] == {"global": {"User": {
-                "receiver": 0,
-            }}}
+            assert tr2_events[0].payload["last_write_set"] == {
+                "global": {
+                    "User": {
+                        "receiver": 0,
+                    }
+                }
+            }
 
             # INVOKE_EXTERNAL User(sender).update_balance(...)
             # Should get committed (newer) state from 1st transaction, which
@@ -170,17 +203,21 @@ class TestCommitState:
             # in an updated last_write_set and a restart of the transaction.
             tr2_events = self.step(sender, tr2_events[0])
             assert sender.store.last_committed_version_id == 1
-            assert tr2_events[0].payload["last_write_set"] == {"global": {"User": {
-                "receiver": 1,
-                "sender": 1,
-            }}}
+            assert tr2_events[0].payload["last_write_set"] == {
+                "global": {
+                    "User": {
+                        "receiver": 1,
+                        "sender": 1,
+                    }
+                }
+            }
 
             # INVOKE_SPLIT_FUN User(receiver).transfer_balance_0(...) (AGAIN)
             # Gets uncommitted version from 1st transaction this time.
             tr2_events = self.step(receiver, transfer_balance_event_reverse)
             rcvr_version = receiver.store.get_version_for_event_id(tr2_event_id)
             assert receiver.store.last_committed_version_id < rcvr_version.parent_id
-            assert rcvr_version.parent_id == 1 # New uncommitted version
+            assert rcvr_version.parent_id == 1  # New uncommitted version
             assert rcvr_version.id == 3
 
             # INVOKE_EXTERNAL User(sender).update_balance(...)
@@ -194,8 +231,6 @@ class TestCommitState:
             tr2_events = self.step(receiver, tr2_events[0])
             # COMMIT_STATE User(sender)
             _ = self.step(sender, tr2_events[0])
-
-        tr2()  # indented to make it easier to see what happens
         ########## End 2nd transaction ##########
 
         # COMMIT_STATE User(receiver)
@@ -282,7 +317,9 @@ class Model:
         self.operator: StatefulOperator = operator
         self.store = Store(initial_state=initial_state)
         self.fun_addr = FunctionAddress(
-            FunctionType("global", name, True), key)
+            FunctionType("global", name, True),
+            key,
+        )
 
     def update_store(self, serialized_store: bytes):
         self.store = self.serializer.deserialize_store(serialized_store)
