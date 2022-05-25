@@ -7,8 +7,11 @@ from stateflow.dataflow.event_flow import EventFlowGraph, ReturnNode
 from stateflow.dataflow.state import State, Store, WriteSet
 from stateflow.serialization.pickle_serializer import PickleSerializer, SerDe
 from stateflow.util.generator_wrapper import WrappedGenerator, keep_return_value
-from stateflow.wrappers.class_wrapper import (ClassWrapper, FailedInvocation,
-                                              InvocationResult)
+from stateflow.wrappers.class_wrapper import (
+    ClassWrapper,
+    FailedInvocation,
+    InvocationResult,
+)
 from stateflow.wrappers.meta_wrapper import MetaWrapper
 
 NoType = NewType("NoType", None)
@@ -77,14 +80,16 @@ class StatefulOperator(Operator):
         elif event_type == EventType.Request.UpdateState:
             yield self._handle_update_state(event, store)
         elif event_type == EventType.Request.CommitState:
-            self._handle_commit_state(event, store) # Does not emit events
+            self._handle_commit_state(event, store)  # Does not emit events
         elif event_type == EventType.Request.EventFlow:
             yield from self._handle_event_flow(event, store)
         else:
             raise AttributeError(f"Unknown event type: {event_type}.")
 
     @keep_return_value
-    def handle(self, event: Event, serialized_state: Optional[bytes]) -> WrappedGenerator[Event, None, Optional[bytes]]:
+    def handle(
+        self, event: Event, serialized_state: Optional[bytes]
+    ) -> WrappedGenerator[Event, None, Optional[bytes]]:
         """Handles incoming event and current state.
 
         Depending on the event type, a method is executed or a instance is created, or state is updated, etc.
@@ -95,7 +100,9 @@ class StatefulOperator(Operator):
         """
 
         if event.event_type == EventType.Request.InitClass:
-            event, updated_state = self._handle_create_with_state(event, serialized_state)
+            event, updated_state = self._handle_create_with_state(
+                event, serialized_state
+            )
             yield event
             return updated_state
 
@@ -106,7 +113,7 @@ class StatefulOperator(Operator):
                 event_type=EventType.Reply.KeyNotFound,
                 payload={
                     "error_message": f"Stateful instance with key={event.fun_address.key} does not exist."
-                }
+                },
             )
             return serialized_state
 
@@ -128,7 +135,9 @@ class StatefulOperator(Operator):
         :param state: the current state (in bytes), might be None.
         :return: the outgoing event and (updated) state.
         """
-        if state:  # In this case, we already created a class before, so we will return an error.
+        if (
+            state
+        ):  # In this case, we already created a class before, so we will return an error.
             return (
                 event.copy(
                     event_type=EventType.Reply.FailedInvocation,
@@ -199,13 +208,12 @@ class StatefulOperator(Operator):
             event_type=EventType.Reply.SuccessfulStateRequest,
             payload={},
         )
+
         store.update_version(version, version.state)
         store.commit_version(version.id)
         return return_event
 
-    def _handle_invoke_stateful(
-        self, event: Event, store: Store
-    ) -> Event:
+    def _handle_invoke_stateful(self, event: Event, store: Store) -> Event:
         """Invokes a stateful method.
 
         The incoming event needs to have a `method_name` and `args` in its payload for the invocation.
@@ -265,7 +273,9 @@ class StatefulOperator(Operator):
             event.payload["write_set"] = write_set
             # - check if parent_write_set has newer versions of operators
             #   that are in the write_set and last_write_set.
-            parent_write_set = store.get_version(version.parent_id).write_set or WriteSet()
+            parent_write_set = (
+                store.get_version(version.parent_id).write_set or WriteSet()
+            )
             # - loop over all addresses in the write_set to check if they
             #   are consistent with the parent_write_set.
             is_consistent = True
@@ -280,7 +290,10 @@ class StatefulOperator(Operator):
                     # newer version.
                     parent_version = last_write_set.get(ns, o, k)
                     if parent_version < min_parent_version:
-                        print(f"Inconsistent version for {ns}:{o}:{k} ({parent_version} < {min_parent_version})")
+                        print(
+                            f"Inconsistent version for {ns}:{o}:{k} '\
+                            '({parent_version} < {min_parent_version})"
+                        )
                         is_consistent = False
                 # - update the last_write_set to include the other operators
                 last_write_set.add(ns, o, k, min_parent_version)
@@ -326,7 +339,7 @@ class StatefulOperator(Operator):
                 yield event.copy(
                     fun_address=address,
                     event_type=EventType.Request.CommitState,
-                    payload={"write_set": write_set}
+                    payload={"write_set": write_set},
                 )
 
         yield event
