@@ -117,8 +117,15 @@ class StatefulOperator(Operator):
             )
             return serialized_state
 
-        # We dispatch the event to find the correct execution method.
-        yield from self._dispatch_event(event, store)
+        try:
+            # We dispatch the event to find the correct execution method.
+            yield from self._dispatch_event(event, store)
+        except AbortException:
+            retries = event.payload.get("retries", 0) + 1
+            event.payload["retries"] = retries
+            print("RETRY", retries)
+            yield event
+            return serialized_state
 
         return self.serializer.serialize_store(store)
 
@@ -203,6 +210,9 @@ class StatefulOperator(Operator):
         :return: a tuple of outgoing event + updated state.
         """
         version = store.create_version()
+        if version.id - version.parent_id > 1:
+            raise AbortException()
+
         version.state[event.payload["attribute"]] = event.payload["attribute_value"]
         return_event = event.copy(
             event_type=EventType.Reply.SuccessfulStateRequest,
@@ -229,6 +239,9 @@ class StatefulOperator(Operator):
         :return: a tuple of outgoing event + updated state.
         """
         version = store.create_version()
+        if version.id - version.parent_id > 1:
+            raise AbortException()
+
         invocation: InvocationResult = self.class_wrapper.invoke(
             event.payload["method_name"], version.state, event.payload["args"]
         )
@@ -248,6 +261,8 @@ class StatefulOperator(Operator):
 
     def _handle_commit_state(self, event: Event, store: Store) -> None:
         version = store.get_version_for_event_id(event.event_id)
+        if version.parent_id < store.last_committed_version_id:
+            print("New version is committed before this commit was handled!")
         write_set = event.payload["write_set"]
         version.set_write_set(write_set)
         store.update_version(version)
@@ -266,6 +281,10 @@ class StatefulOperator(Operator):
             min_parent_id = last_write_set.get_address(current_address)
             # - create a new version
             version = store.create_version_for_event_id(event.event_id, min_parent_id)
+            if version.id - version.parent_id > 1:
+                # version was not created from last version
+                del store.event_version_map[event.event_id]
+                raise AbortException()
             # - add it to the write_set
             write_set.add_address(current_address, version.id)
             last_write_set.add_address(current_address, version.parent_id)
@@ -344,3 +363,7 @@ class StatefulOperator(Operator):
 
         yield event
         return
+
+
+class AbortException(Exception):
+    pass
