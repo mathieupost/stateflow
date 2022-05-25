@@ -39,11 +39,14 @@ flake8 = "*"
 pytest = "*"
 coverage = "*"
 ptvsd = "*"
+pipenv-setup = {extras = ["black"], version = "*"}
+black = "*"
 
 [requires]
 python_version = "3.8"
 
 [scripts]
+sync-setup = "pipenv-setup sync --pipfile"
 pytest = "coverage run --source=stateflow -m pytest"
 coverage = "coverage xml"
 lint-errors = "flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics"
