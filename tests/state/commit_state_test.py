@@ -7,7 +7,12 @@ from stateflow.dataflow.address import FunctionAddress, FunctionType
 from stateflow.dataflow.args import Arguments
 from stateflow.dataflow.dataflow import Dataflow, EgressRouter, IngressRouter, Operator
 from stateflow.dataflow.event import Event, EventType
-from stateflow.dataflow.event_flow import EventFlowGraph, InternalClassRef
+from stateflow.dataflow.event_flow import (
+    EventFlowGraph,
+    EventFlowNode,
+    InternalClassRef,
+    InvokeSplitFun,
+)
 from stateflow.dataflow.state import Store
 from stateflow.dataflow.stateful_operator import StatefulOperator
 from stateflow.descriptors.class_descriptor import ClassDescriptor
@@ -199,64 +204,51 @@ class TestCommitState:
         tr1_events = self.step(receiver, tr1_events[0])
         # INVOKE_SPLIT_FUN User(sender).transfer_balance_7(...)
         tr1_events = self.step(sender, tr1_events[0])
+        # User(sender) is committed now.
+        assert sender.store.last_committed_version_id == 1
 
-        ########## Begin 2nd transaction ##########
-        if True:  # indented to make it easier to see what happens
+        if True:  # indented for readability
+            ########## Begin 2nd transaction ##########
             tr2_event_id = transfer_balance_event_reverse.event_id
             # INVOKE_SPLIT_FUN User(receiver).transfer_balance_0(...)
-            # Does not get committed version from 1st transaction.
+            # Detects uncomitted version of User(receiver) and returns the same
+            # event to retry with a "retries" counter defined.
             tr2_events = self.step(receiver, transfer_balance_event_reverse)
+            assert tr2_events[0].payload["retries"] == 1
+            current_node: EventFlowNode = tr2_events[0].payload["flow"].current_node
+            assert isinstance(current_node, InvokeSplitFun)
+            assert current_node.fun_name == "transfer_balance_0"
+
+        ########## Resume 1st transaction ##########
+        # COMMIT_STATE User(receiver)
+        _ = self.step(receiver, tr1_events[0])
+        # User(receiver) is committed now.
+        assert receiver.store.last_committed_version_id == 1
+        ########## End 1st transaction ##########
+
+        if True:
+            ########## Resume 2nd transaction ##########
+            # Transaction 2 can continue. Retry the
+            # transfer_balance_event_reverse event from above.
+            tr2_events = self.step(receiver, tr2_events[0])
             rcvr_version = receiver.store.get_version_for_event_id(tr2_event_id)
-            assert receiver.store.last_committed_version_id == rcvr_version.parent_id
-            assert rcvr_version.parent_id == 0  # Old version
+            assert rcvr_version.parent_id == receiver.store.last_committed_version_id
+            assert rcvr_version.parent_id == 1
             assert rcvr_version.id == 2
-            assert tr2_events[0].payload["last_write_set"] == {
-                "global": {
-                    "User": {
-                        "receiver": 0,
-                    }
-                }
-            }
-
-            # INVOKE_EXTERNAL User(sender).update_balance(...)
-            # Should get committed (newer) state from 1st transaction, which
-            # depends on the new version of User(receiver). This should result
-            # in an updated last_write_set and a restart of the transaction.
-            tr2_events = self.step(sender, tr2_events[0])
-            assert sender.store.last_committed_version_id == 1
-            assert tr2_events[0].payload["last_write_set"] == {
-                "global": {
-                    "User": {
-                        "receiver": 1,
-                        "sender": 1,
-                    }
-                }
-            }
-
-            # INVOKE_SPLIT_FUN User(receiver).transfer_balance_0(...) (AGAIN)
-            # Gets uncommitted version from 1st transaction this time.
-            tr2_events = self.step(receiver, transfer_balance_event_reverse)
-            rcvr_version = receiver.store.get_version_for_event_id(tr2_event_id)
-            assert receiver.store.last_committed_version_id < rcvr_version.parent_id
-            assert rcvr_version.parent_id == 1  # New uncommitted version
-            assert rcvr_version.id == 3
 
             # INVOKE_EXTERNAL User(sender).update_balance(...)
             tr2_events = self.step(sender, tr2_events[0])
-            sndr_version = sender.store.get_version_for_event_id(tr2_event_id)
-            assert sender.store.last_committed_version_id == sndr_version.parent_id
-            assert sndr_version.parent_id == 1
-            assert sndr_version.id == 2
 
             # INVOKE_SPLIT_FUN User(receiver).transfer_balance_7(...)
             tr2_events = self.step(receiver, tr2_events[0])
+            # User(receiver) is committed now.
+            assert receiver.store.last_committed_version_id == 2
+
             # COMMIT_STATE User(sender)
             _ = self.step(sender, tr2_events[0])
-        ########## End 2nd transaction ##########
-
-        # COMMIT_STATE User(receiver)
-        _ = self.step(receiver, tr1_events[0])
-        ########## End 1st transaction ##########
+            # User(sender) is committed now.
+            assert sender.store.last_committed_version_id == 2
+            ########## End 2nd transaction ##########
 
 
 @pytest.fixture(scope="class")
