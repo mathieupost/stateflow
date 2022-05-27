@@ -115,6 +115,10 @@ class TestCommitState:
         user_write_set = receiver.store.get_last_committed_version().write_set
         assert item_write_set == user_write_set
 
+    # Tests a scenario where a sender transfers money to a receiver, but before
+    # the receiver's state is committed, the sender starts another transfer.
+    # Since the sender's state is committed before the 2nd transfer starts, the
+    # 2nd transfer can detect and use the new receiver state.
     def test_commit_state_concurrent(
         self,
         sender: "Model",
@@ -125,14 +129,19 @@ class TestCommitState:
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
         tr1_events = self.step(sender, transfer_balance_event1)
+
         # INVOKE_EXTERNAL User(receiver).update_balance(...)
         tr1_events = self.step(receiver, tr1_events[0])
+
         # INVOKE_SPLIT_FUN User(sender).transfer_balance_7(...)
         tr1_events = self.step(sender, tr1_events[0])
+        # User(sender) is committed now.
+        assert sender.store.last_committed_version_id == 1
 
-        ########## Begin 2nd transaction ##########
-        if True:  # indented to make it easier to see what happens
+        if True:  # indented for readability
+            ########## Begin 2nd transaction ##########
             tr2_event_id = transfer_balance_event2.event_id
+
             # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
             # Gets committed version from 1st transaction.
             tr2_events = self.step(sender, transfer_balance_event2)
@@ -140,14 +149,22 @@ class TestCommitState:
             assert sender.store.last_committed_version_id == sndr_version.parent_id
             assert sndr_version.parent_id == 1
             assert sndr_version.id == 2
-            assert (
-                tr2_events[0].payload["last_write_set"]
-                == sender.store.get_last_committed_version().write_set
-            )
+            # The event's last_write_set should have been set to the write_set
+            # of the last committed version.
+            last_write_set = tr2_events[0].payload["last_write_set"]
+            assert last_write_set == sender.store.get_last_committed_version().write_set
+            assert last_write_set == {
+                "global": {
+                    "User": {
+                        "receiver": 1,
+                        "sender": 1,
+                    }
+                }
+            }
 
             # INVOKE_EXTERNAL User(receiver).update_balance(...)
             # Should get uncommitted (newer) state from 1st transaction, because
-            # of detected new version in write_set of the state of item.
+            # of detected new version (receiver: 1) in the event's last_write_set.
             tr2_events = self.step(receiver, tr2_events[0])
             rcvr_version = receiver.store.get_version_for_event_id(tr2_event_id)
             assert receiver.store.last_committed_version_id < rcvr_version.parent_id
@@ -156,12 +173,16 @@ class TestCommitState:
 
             # INVOKE_SPLIT_FUN User(sender).transfer_balance_7(...)
             tr2_events = self.step(sender, tr2_events[0])
+
             # COMMIT_STATE User(receiver)
             _ = self.step(receiver, tr2_events[0])
-        ########## End 2nd transaction ##########
+            assert receiver.store.last_committed_version_id == 2
+            ########## End 2nd transaction ##########
 
         # COMMIT_STATE User(receiver)
         _ = self.step(receiver, tr1_events[0])
+        # Check if the CommitState event did NOT overwrite the committed version.
+        assert receiver.store.last_committed_version_id == 2
         ########## End 1st transaction ##########
 
     def test_commit_state_concurrent_reverse(
