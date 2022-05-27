@@ -11,6 +11,7 @@ from stateflow.dataflow.event_flow import (
     EventFlowGraph,
     EventFlowNode,
     InternalClassRef,
+    InvokeExternal,
     InvokeSplitFun,
 )
 from stateflow.dataflow.state import Store
@@ -312,6 +313,41 @@ class TestCommitState:
             # User(sender) is committed now.
             assert sender.store.last_committed_version_id == 2
             ########## End 2nd transaction ##########
+
+    def test_commit_state_concurrent_reverse_deadlock(
+        self,
+        sender: "Model",
+        receiver: "Model",
+        transfer_balance_event1: Event,
+        transfer_balance_event_reverse: Event,
+    ):
+        ########## Begin 1st transaction ##########
+        # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
+        tr1_events = self.step(sender, transfer_balance_event1)
+
+        if True:  # indented for readability
+            ########## Begin 2nd transaction ##########
+            # INVOKE_SPLIT_FUN User(receiver).transfer_balance_0(...)
+            tr2_events = self.step(receiver, transfer_balance_event_reverse)
+
+        ########## Resume 1st transaction ##########
+        # INVOKE_EXTERNAL User(receiver).update_balance(...)
+        tr1_events = self.step(receiver, tr1_events[0])
+        assert tr1_events[0].payload["retries"] == 1
+        current_node: EventFlowNode = tr1_events[0].payload["flow"].current_node
+        assert isinstance(current_node, InvokeExternal)
+        assert current_node.fun_name == "update_balance"
+
+        if True:
+            ########## Resume 2nd transaction ##########
+            # INVOKE_EXTERNAL User(sender).update_balance(...)
+            tr2_events = self.step(sender, tr2_events[0])
+            assert tr2_events[0].payload["retries"] == 1
+            current_node: EventFlowNode = tr2_events[0].payload["flow"].current_node
+            assert isinstance(current_node, InvokeExternal)
+            assert current_node.fun_name == "update_balance"
+
+        ########## DEADLOCK ##########
 
 
 @pytest.fixture(scope="class")
