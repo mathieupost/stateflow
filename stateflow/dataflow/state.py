@@ -42,7 +42,7 @@ class WriteSet(dict):
 
     def add(self, namespace: str, operator: str, key: str, version: int):
         """Adds the version for the given namespace, operator and key.
-        
+
         If the version already exists, the maximum version is used.
         """
         if not namespace in self:
@@ -54,11 +54,12 @@ class WriteSet(dict):
         if not key in self[namespace][operator]:
             self[namespace][operator][key] = version
         else:
-            self[namespace][operator][key] = max(self[namespace][operator][key], version)
+            current = self[namespace][operator][key]
+            self[namespace][operator][key] = max(current, version)
 
     def add_address(self, address: FunctionAddress, version: int):
         """Adds the version of the given FunctionAddress to the set.
-        
+
         If the version already exists, the maximum version is used.
         """
         namespace = address.function_type.namespace
@@ -68,7 +69,7 @@ class WriteSet(dict):
 
     def get(self, namespace: str, operator: str, key: str) -> int:
         """Returns the version for the given namespace, operator and key.
-        
+
         If the version does not exist, -1 is returned.
         """
         if namespace not in self:
@@ -84,7 +85,7 @@ class WriteSet(dict):
 
     def get_address(self, address: FunctionAddress) -> int:
         """Returns the version for the given FunctionAddress.
-        
+
         If the version does not exist, -1 is returned.
         """
         namespace = address.function_type.namespace
@@ -114,6 +115,7 @@ class WriteSet(dict):
             fa = FunctionAddress(ft, key)
             yield fa
 
+
 class Version:
     def __init__(self, id: int, parent_id: int, state: State) -> None:
         self.id = id
@@ -133,7 +135,7 @@ class Version:
 
     def set_state(self, state: State):
         """Sets the state of this version to the given state.
-        
+
         And updates the version id of the state.
         """
         state._version_id = self.id
@@ -141,12 +143,12 @@ class Version:
 
     def set_write_set(self, write_set: WriteSet):
         self.write_set = write_set
-    
+
 
 class Store:
     def __init__(self, data=None, initial_state=None) -> None:
         """Initialized the store object from the given dict.
-        
+
         If an initial state is provided, a new Store will be created with the
         given initial state as version 0.
         """
@@ -162,7 +164,7 @@ class Store:
         self.last_committed_version_id: int = data["last_committed_version_id"]
         self.event_version_map: Dict[str, int] = data["event_version_map"]
 
-    def create_version(self, min_parent_id = -1) -> Version:
+    def create_version(self, min_parent_id=-1) -> Version:
         """Create a new version based on the last committed version.
 
         Increments the highest available version id to use as id for the new
@@ -213,7 +215,7 @@ class Store:
 
     def get_version_for_event_id(self, event_id: str) -> Version:
         """Gets the version for the given event id.
-        
+
         :param event_id: the id of the event to get the corresponding version for.
         :return: the version for the given event id.
         """
@@ -221,7 +223,7 @@ class Store:
         version = self.get_version(id)
         return version
 
-    def create_version_for_event_id(self, event_id: str, min_parent_id = -1) -> Version:
+    def create_version_for_event_id(self, event_id: str, min_parent_id=-1) -> Version:
         """Creates a new version for the given event id.
 
         :param event_id: the id of the event to create the corresponding version for.
@@ -233,11 +235,12 @@ class Store:
 
     def commit_version(self, version_id):
         """Commits the version with the given id.
-        
+
         If a new version is committed before, nothing happens.
         """
         if version_id > self.last_committed_version_id:
             self.last_committed_version_id = version_id
+
 
 class StateDescriptor:
     def __init__(self, state_desc: Dict[str, Any]):
