@@ -1,4 +1,4 @@
-from typing import Any, Dict, Iterator, NamedTuple, Optional, Tuple
+from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Tuple
 
 import jsonpickle
 from stateflow.dataflow.address import FunctionAddress, FunctionType
@@ -168,6 +168,7 @@ class Store:
             self.encoded_versions: Dict[int, bytes] = dict()
             self.last_committed_version_id: int = 0
             self.event_version_map: Dict[str, int] = dict()
+            self.queue: List[bytes] = list()
             self.waiting_for: Optional[EventAddressTuple] = None
 
             initial_version = Version(0, -1, State(initial_state))
@@ -178,6 +179,7 @@ class Store:
         self.encoded_versions: Dict[int, bytes] = data["encoded_versions"]
         self.last_committed_version_id: int = data["last_committed_version_id"]
         self.event_version_map: Dict[str, int] = data["event_version_map"]
+        self.queue: List[bytes] = data.get("queue", [])
         self.waiting_for: Optional[EventAddressTuple] = data.get("waiting_for")
 
     def create_version(self, min_parent_id=-1) -> Version:
