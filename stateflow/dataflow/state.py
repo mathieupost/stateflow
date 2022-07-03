@@ -1,6 +1,6 @@
-from typing import Dict, Any, Iterator, Tuple
-import jsonpickle
+from typing import Any, Dict, Iterator, NamedTuple, Optional, Tuple
 
+import jsonpickle
 from stateflow.dataflow.address import FunctionAddress, FunctionType
 
 
@@ -145,6 +145,18 @@ class Version:
         self.write_set = write_set
 
 
+class EventAddressTuple(NamedTuple):
+    event_id: str
+    address: FunctionAddress
+
+    @staticmethod
+    def from_dict(d: Dict) -> "EventAddressTuple":
+        return EventAddressTuple(
+            d[0],
+            FunctionAddress.from_dict(d[1]),
+        )
+
+
 class Store:
     def __init__(self, data=None, initial_state=None) -> None:
         """Initialized the store object from the given dict.
@@ -156,13 +168,17 @@ class Store:
             self.encoded_versions: Dict[int, bytes] = dict()
             self.last_committed_version_id: int = 0
             self.event_version_map: Dict[str, int] = dict()
+            self.waiting_for: Optional[EventAddressTuple] = None
+
             initial_version = Version(0, -1, State(initial_state))
             self.update_version(initial_version)
             return
 
+        assert isinstance(data, dict)
         self.encoded_versions: Dict[int, bytes] = data["encoded_versions"]
         self.last_committed_version_id: int = data["last_committed_version_id"]
         self.event_version_map: Dict[str, int] = data["event_version_map"]
+        self.waiting_for: Optional[EventAddressTuple] = data.get("waiting_for")
 
     def create_version(self, min_parent_id=-1) -> Version:
         """Create a new version based on the last committed version.
