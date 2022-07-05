@@ -4,7 +4,7 @@ from stateflow.dataflow.address import FunctionAddress
 from stateflow.dataflow.dataflow import Edge, EventType, FunctionType, Operator
 from stateflow.dataflow.event import Event
 from stateflow.dataflow.event_flow import EventFlowGraph, ReturnNode
-from stateflow.dataflow.state import State, Store, Version, WriteSet
+from stateflow.dataflow.state import EventAddressTuple, State, Store, Version, WriteSet
 from stateflow.serialization.pickle_serializer import PickleSerializer, SerDe
 from stateflow.util.generator_wrapper import WrappedGenerator, keep_return_value
 from stateflow.wrappers.class_wrapper import (
@@ -354,14 +354,18 @@ class StatefulOperator(Operator):
 
 
         if is_last:
+            store.waiting_for = None
             # Commit if this was the last node in the flow
             self._commit(store, version, write_set, updated_state)
             # And yield CommitState events for all other involved operators.
             yield from self._generate_commit_events(event)
         else:
+            # Set waiting_for to the next operator in the flow.
+            store.waiting_for = EventAddressTuple(event.event_id, node.fun_addr)
             # Update the version otherwise.
             store.update_version(version, updated_state)
 
+        # Continue the event flow in the next operator.
         yield event
         return
 
