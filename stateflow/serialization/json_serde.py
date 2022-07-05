@@ -2,30 +2,37 @@ import ujson
 from stateflow.dataflow.args import Arguments
 from stateflow.dataflow.event import EventType, FunctionAddress
 from stateflow.dataflow.event_flow import EventFlowGraph
-from stateflow.dataflow.state import Store, WriteSet
+from stateflow.dataflow.state import EventAddressTuple, Store, WriteSet
 from stateflow.serialization.serde import Event, SerDe
 
 
 class JsonSerializer(SerDe):
     def serialize_store(self, store: Store) -> bytes:
-        encoded_versions = store.encoded_versions
-        last_committed_version_id = store.last_committed_version_id
-        event_version_map = store.event_version_map
-
         store_dict = {
-            "encoded_versions": encoded_versions,
-            "last_committed_version_id": last_committed_version_id,
-            "event_version_map": event_version_map,
+            "encoded_versions": store.encoded_versions,
+            "last_committed_version_id": store.last_committed_version_id,
+            "event_version_map": store.event_version_map,
         }
+        if store.waiting_for is not None:
+            store_dict["waiting_for"] = store.waiting_for
         return self.serialize_dict(store_dict)
 
     def deserialize_store(self, store: bytes) -> Store:
         store_dict = self.deserialize_dict(store)
-        
+
         # Make sure the keys are integers (encoding/decoding makes them strings).
         encoded_versions = store_dict.get("encoded_versions", {})
-        if len(encoded_versions) > 0 and not isinstance(next(iter(encoded_versions)), int):
-            store_dict["encoded_versions"] = {int(k): v for k, v in store_dict["encoded_versions"].items()}
+        if len(encoded_versions) > 0 and not isinstance(
+            next(iter(encoded_versions)), int
+        ):
+            store_dict["encoded_versions"] = {
+                int(k): v for k, v in store_dict["encoded_versions"].items()
+            }
+
+        if "waiting_for" in store_dict:
+            store_dict["waiting_for"] = EventAddressTuple.from_dict(
+                store_dict["waiting_for"]
+            )
 
         if type(store_dict) is Store:
             return store_dict
