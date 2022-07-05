@@ -435,7 +435,7 @@ class ReturnNode(EventFlowNode):
         state: State,
         instance: Any,
     ) -> Tuple[EventFlowNode, State, Any]:
-        if self.next == [] or self.next == -1:
+        if self.is_last():
             return self, state, instance
 
         # TODO, We assume only 1 next node.
