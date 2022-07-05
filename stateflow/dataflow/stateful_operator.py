@@ -329,27 +329,25 @@ class StatefulOperator(Operator):
             # get the version for this event flow.
             version = store.get_version_for_event_id(event.event_id)
 
-        updated_state, instance = flow_graph.step(self.class_wrapper, version.state)
-
-        # Keep stepping :)
-        while flow_graph.current_node.fun_addr == current_address:
-            if (
-                isinstance(flow_graph.current_node, ReturnNode)
-                and flow_graph.current_node.next == []
-                or flow_graph.current_node.next == -1
-            ):
-                break
-
-            updated_state, _ = flow_graph.step(
+        # Initial node
+        node, is_last = flow_graph.current_node, False
+        # Initial step parameters
+        instance, updated_state = None, version.state
+        # Keep stepping through the flow as long as the next node should be
+        # executed in the current operator.
+        while node.fun_addr == current_address and not is_last:
+            updated_state, instance = flow_graph.step(
                 self.class_wrapper, updated_state, instance
             )
+            # Update the next node.
+            node = flow_graph.current_node
+            is_last = isinstance(node, ReturnNode) and node.is_last()
 
         version.set_write_set(write_set)
         store.update_version(version, updated_state)
 
-        if isinstance(flow_graph.current_node, ReturnNode):
-            # If the current node in the return event is a ReturnNode, directly
-            # commit the version of this operator.
+        if is_last:
+            # Commit if this was the last node in the flow
             store.commit_version(version.id)
             # And yield CommitState events for all other involved operators.
             yield from self._generate_commit_events(event)
