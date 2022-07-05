@@ -1,3 +1,4 @@
+from typing import List
 import ujson
 from stateflow.dataflow.args import Arguments
 from stateflow.dataflow.event import EventType, FunctionAddress
@@ -66,6 +67,12 @@ class JsonSerializer(SerDe):
 
         if "flow" in payload:
             payload["flow"] = EventFlowGraph.from_dict(payload["flow"])
+
+        if "path" in payload:
+            path: List[EventAddressTuple] = []
+            for path_item in payload["path"]:
+                path.append(EventAddressTuple.from_dict(path_item))
+            payload["path"] = path
 
         if "write_set" in payload:
             payload["write_set"] = WriteSet(payload["write_set"])
