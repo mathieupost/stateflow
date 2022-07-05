@@ -17,6 +17,7 @@ class _Request(Enum):
     CommitState = "CommitState"
 
     EventFlow = "EventFlow"
+    DeadlockCheck = "DeadlockCheck"
 
     Ping = "Ping"
 
