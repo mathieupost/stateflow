@@ -352,17 +352,24 @@ class StatefulOperator(Operator):
             # commit the version of this operator.
             store.commit_version(version.id)
             # And yield CommitState events for all other involved operators.
-            for address in write_set.iterate_addresses():
-                if address == current_address:
-                    continue
-                yield event.copy(
-                    fun_address=address,
-                    event_type=EventType.Request.CommitState,
-                    payload={"write_set": write_set},
-                )
+            yield from self._generate_commit_events(event)
 
         yield event
         return
+
+    def _generate_commit_events(self, event: Event) -> Iterator[Event]:
+        write_set = event.payload["write_set"]
+        flow_graph: EventFlowGraph = event.payload["flow"]
+        current_address: FunctionAddress = flow_graph.current_node.fun_addr
+
+        for address in write_set.iterate_addresses():
+            if address == current_address:
+                continue
+            yield event.copy(
+                fun_address=address,
+                event_type=EventType.Request.CommitState,
+                payload={"write_set": write_set},
+            )
 
 
 class AbortException(Exception):
