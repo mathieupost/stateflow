@@ -352,14 +352,15 @@ class StatefulOperator(Operator):
             node = flow_graph.current_node
             is_last = isinstance(node, ReturnNode) and node.is_last()
 
-        version.set_write_set(write_set)
-        store.update_version(version, updated_state)
 
         if is_last:
             # Commit if this was the last node in the flow
-            store.commit_version(version.id)
+            self._commit(store, version, write_set, updated_state)
             # And yield CommitState events for all other involved operators.
             yield from self._generate_commit_events(event)
+        else:
+            # Update the version otherwise.
+            store.update_version(version, updated_state)
 
         yield event
         return
