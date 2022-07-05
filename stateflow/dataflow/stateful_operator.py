@@ -4,7 +4,7 @@ from stateflow.dataflow.address import FunctionAddress
 from stateflow.dataflow.dataflow import Edge, EventType, FunctionType, Operator
 from stateflow.dataflow.event import Event
 from stateflow.dataflow.event_flow import EventFlowGraph, ReturnNode
-from stateflow.dataflow.state import State, Store, WriteSet
+from stateflow.dataflow.state import State, Store, Version, WriteSet
 from stateflow.serialization.pickle_serializer import PickleSerializer, SerDe
 from stateflow.util.generator_wrapper import WrappedGenerator, keep_return_value
 from stateflow.wrappers.class_wrapper import (
@@ -259,14 +259,23 @@ class StatefulOperator(Operator):
                 payload={"return_results": invocation.return_results},
             )
 
+    def _commit(
+        self,
+        store: Store,
+        version: Version,
+        write_set: WriteSet,
+        updated_state: Optional[State] = None,
+    ):
+        version.set_write_set(write_set)
+        store.update_version(version, updated_state)
+        store.commit_version(version.id)
+
     def _handle_commit_state(self, event: Event, store: Store) -> None:
         version = store.get_version_for_event_id(event.event_id)
         if version.parent_id < store.last_committed_version_id:
             print("New version is committed before this commit was handled!")
         write_set = event.payload["write_set"]
-        version.set_write_set(write_set)
-        store.update_version(version)
-        store.commit_version(version.id)
+        self._commit(store, version, write_set)
 
     def _handle_event_flow(self, event: Event, store: Store) -> Iterator[Event]:
         flow_graph: EventFlowGraph = event.payload["flow"]
