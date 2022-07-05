@@ -37,10 +37,6 @@ class JsonSerializer(SerDe):
         fun_address: dict = event.fun_address.to_dict()
         payload: dict = event.payload
 
-        for item in payload:
-            if hasattr(payload[item], "to_dict"):
-                payload[item] = payload[item].to_dict()
-
         event_dict = {
             "event_id": event_id,
             "event_type": event_type,

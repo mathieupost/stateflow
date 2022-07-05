@@ -52,6 +52,10 @@ class InternalClassRef:
     def _get_key(self) -> str:
         return self._fun_addr.key
 
+    def toDict(self):
+        """For custom usjon serialization"""
+        return self._to_dict()
+
     def _to_dict(self) -> Dict:
         return {
             "fun_addr": self._fun_addr.to_dict(),
@@ -187,6 +191,10 @@ class EventFlowNode:
 
     def get_next(self) -> List[int]:
         return self.next
+
+    def toDict(self) -> Dict:
+        """For custom usjon serialization"""
+        return self.to_dict()
 
     def to_dict(self) -> Dict:
         if self.fun_addr:
@@ -348,6 +356,10 @@ class EventFlowGraph:
         for node in self.graph:
             node.status = "PENDING"
         self.step()
+
+    def toDict(self):
+        """For custom usjon serialization"""
+        return self.to_dict()
 
     def to_dict(self):
         return_dict = {}

@@ -67,6 +67,10 @@ class FunctionAddress:
     def is_stateless(self):
         return self.function_type.is_stateless()
 
+    def toDict(self):
+        """For custom usjon serialization"""
+        return self.to_dict()
+
     def to_dict(self):
         return {"function_type": self.function_type.to_dict(), "key": self.key}
 
