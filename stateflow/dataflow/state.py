@@ -251,6 +251,14 @@ class Store:
         self.event_version_map[event_id] = version.id
         return version
 
+    def delete_version_for_event_id(self, event_id: str):
+        """Deletes the version for the given event id.
+
+        :param event_id: the id of the event to delete the corresponding version for.
+        """
+        abort_version_id = self.event_version_map.pop(event_id)
+        self.encoded_versions.pop(abort_version_id)
+
     def commit_version(self, version_id):
         """Commits the version with the given id.
 

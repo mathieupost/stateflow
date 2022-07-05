@@ -14,6 +14,8 @@ class JsonSerializer(SerDe):
             "last_committed_version_id": store.last_committed_version_id,
             "event_version_map": store.event_version_map,
         }
+        if len(store.queue) > 0:
+            store_dict["queue"] = store.queue
         if store.waiting_for is not None:
             store_dict["waiting_for"] = store.waiting_for
         return self.serialize_dict(store_dict)
@@ -83,7 +85,9 @@ class JsonSerializer(SerDe):
         return Event(event_id, fun_address, event_type, payload)
 
     def serialize_dict(self, dictionary: dict) -> bytes:
-        return ujson.encode(dictionary, ensure_ascii=False).encode("utf-8")
+        return ujson.encode(dictionary, ensure_ascii=False, reject_bytes=False).encode(
+            "utf-8"
+        )
 
     def deserialize_dict(self, dictionary: bytes) -> dict:
         return ujson.decode(dictionary)

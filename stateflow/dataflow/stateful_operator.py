@@ -81,6 +81,8 @@ class StatefulOperator(Operator):
             yield self._handle_update_state(event, store)
         elif event_type == EventType.Request.CommitState:
             self._handle_commit_state(event, store)  # Does not emit events
+        elif event_type == EventType.Request.DeadlockCheck:
+            yield from self._handle_deadlock_check(event, store)
         elif event_type == EventType.Request.EventFlow:
             yield from self._handle_event_flow(event, store)
         else:
@@ -277,6 +279,111 @@ class StatefulOperator(Operator):
         write_set = event.payload["write_set"]
         self._commit(store, version, write_set)
 
+    def _create_deadlock_check_event(
+        self, cur_addr: FunctionAddress, event: Event, store: Store
+    ) -> Event:
+        """Creates a DeadlockCheck event for the operator we are waiting for.
+
+        :param cur_addr: the address of the current operator.
+        :param event: the current event.
+        :param store: the current state.
+        :return: the outgoing event.
+        """
+        assert store.waiting_for is not None
+        wf_event_id, wf_addr = store.waiting_for
+        path: List[EventAddressTuple] = event.payload.get("path", [])
+        path.append(EventAddressTuple(wf_event_id, cur_addr))
+        return event.copy(
+            event_type=EventType.Request.DeadlockCheck,
+            fun_address=wf_addr,
+            payload={"path": path},
+        )
+
+    def _handle_deadlock_check(self, event: Event, store: Store) -> Iterator[Event]:
+        """Checks if the current state is in a deadlock state.
+
+        We do this by checking if the current state is in a cycle. If it is, we
+        abort the transaction and continue with the next event in the queue.
+
+        :param event: the incoming event.
+        :param state: the current state.
+        :return: None.
+        """
+        if store.waiting_for is None:
+            # We are not waiting for anything, so no need to handle deadlocks!
+            return
+
+        if event.event_type == EventType.Request.EventFlow:
+            cur_addr = event.payload["flow"].current_node.fun_addr
+        else:
+            cur_addr = event.fun_address
+
+        wf_event_id, wf_addr = store.waiting_for
+        path: List[EventAddressTuple] = event.payload.get("path", [])
+        for i in range(len(path) - 1, -1, -1):  # traverse backwards
+            _, addr = path[i]
+            if addr != wf_addr:
+                # Continue until we find the operator we are waiting for.
+                continue
+            # We found a cycle. This operator is waiting for an event
+            # (wf_event_id) to continue or commit/abort, but that event is
+            # queued in an operator (addr/wf_addr) which in turn is waiting
+            # for this event (event_id) to finish.
+            path.append(EventAddressTuple(wf_event_id, wf_addr))
+            # Select the event with the highest id.
+            abort_event_id = min(path[i:], key=lambda x: x[0])[0]
+            if abort_event_id == wf_event_id:
+                # If that event is the event that the current operator is
+                # waiting for, we stop waiting for it.
+                store.waiting_for = None
+                store.delete_version_for_event_id(abort_event_id)
+                if len(store.queue) > 0:
+                    # And continue with the next event in the queue, if any.
+                    serialized_event = store.queue.pop()
+                    event = self.serializer.deserialize_event(serialized_event)
+                    yield from self._handle_event_flow(event, store)
+            else:
+                # Otherwise, we remove the event from the queue and retry
+                # it, if it is there.
+                aborted_event = self._remove_from_queue(abort_event_id, store)
+                if aborted_event is not None:
+                    yield self._reset_and_retry_event(aborted_event)
+            return
+
+        # The operator we are waiting for is not in the path. So we didn't find
+        # a cycle. Forward a DeadlockCheck event to the operator we are waiting
+        # for to check if we can detect a deadlock there.
+        yield self._create_deadlock_check_event(cur_addr, event, store)
+
+    def _remove_from_queue(self, event_id: str, store: Store) -> Optional[Event]:
+        for i, serialized_event in enumerate(store.queue):
+            event = self.serializer.deserialize_event(serialized_event)
+            if event.event_id == event_id:
+                store.queue.pop(i)
+                return event
+
+    def _reset_and_retry_event(self, event: Event) -> Event:
+        """Retries an event.
+
+        :param event: the event to retry.
+        :return: the retried event.
+        """
+        # Reset the EventFlowGraph
+        flow_graph: EventFlowGraph = event.payload["flow"]
+        flow_graph.reset()
+        # Pass the last_write_set to the event, so that it can use it to
+        # determine the minimum parent versions of operators.
+        last_write_set = event.payload["last_write_set"]
+        # And set or increase the retry count.
+        retries = event.payload.get("retries", 0) + 1
+        return event.copy(
+            payload={
+                "flow": flow_graph,
+                "last_write_set": last_write_set,
+                "retries": retries,
+            }
+        )
+
     def _handle_event_flow(self, event: Event, store: Store) -> Iterator[Event]:
         flow_graph: EventFlowGraph = event.payload["flow"]
         current_address: FunctionAddress = flow_graph.current_node.fun_addr
@@ -291,9 +398,14 @@ class StatefulOperator(Operator):
             # - create a new version
             version = store.create_version_for_event_id(event.event_id, min_parent_id)
             if version.id - version.parent_id > 1:
-                # version was not created from last version
+                # The version was not created from last version, so another
+                # operation is already in progress. Delete the created version
+                # and add the event to the queue.
                 del store.event_version_map[event.event_id]
-                raise AbortException()
+                serialized_event = self.serializer.serialize_event(event)
+                store.queue.append(serialized_event)
+                yield from self._handle_deadlock_check(event, store)
+                return
             # - add it to the write_set
             write_set.add_address(current_address, version.id)
             last_write_set.add_address(current_address, version.parent_id)
@@ -319,8 +431,8 @@ class StatefulOperator(Operator):
                     parent_version = last_write_set.get(ns, o, k)
                     if parent_version < min_parent_version:
                         print(
-                            f"Inconsistent version for {ns}:{o}:{k} '\
-                            '({parent_version} < {min_parent_version})"
+                            f"Inconsistent version for {ns}:{o}:{k} \
+                            ({parent_version} < {min_parent_version})"
                         )
                         is_consistent = False
                 # - update the last_write_set to include the other operators
@@ -329,9 +441,7 @@ class StatefulOperator(Operator):
             # - if the version is inconsistent with previous operator
             #   versions, we need to restart the flow.
             if not is_consistent:
-                flow_graph.reset()
-                del event.payload["write_set"]
-                yield event
+                yield self._reset_and_retry_event(event)
                 return
         else:
             # If the current operator is in the write set, we need to
