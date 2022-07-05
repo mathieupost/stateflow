@@ -185,7 +185,7 @@ class Store:
 
         return version
 
-    def update_version(self, version: Version, updated_state: State = None):
+    def update_version(self, version: Version, updated_state: Optional[State] = None):
         """Encodes and sets the given version.
 
         :param id: the id of the version to set.
