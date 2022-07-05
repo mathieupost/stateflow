@@ -2,7 +2,7 @@ import ujson
 from stateflow.dataflow.args import Arguments
 from stateflow.dataflow.event import EventType, FunctionAddress
 from stateflow.dataflow.event_flow import EventFlowGraph
-from stateflow.dataflow.state import Store
+from stateflow.dataflow.state import Store, WriteSet
 from stateflow.serialization.serde import Event, SerDe
 
 
@@ -54,15 +54,21 @@ class JsonSerializer(SerDe):
         json = self.deserialize_dict(event)
 
         event_id: str = json["event_id"]
-        event_type: str = EventType.from_str(json["event_type"])
-        fun_address: dict = FunctionAddress.from_dict(json["fun_address"])
+        event_type = EventType.from_str(json["event_type"])
+        fun_address = FunctionAddress.from_dict(json["fun_address"])
         payload: dict = json["payload"]
 
         if "args" in payload:
-            payload["args"] = Arguments.from_dict(json["payload"]["args"])
+            payload["args"] = Arguments.from_dict(payload["args"])
 
         if "flow" in payload:
             payload["flow"] = EventFlowGraph.from_dict(payload["flow"])
+
+        if "write_set" in payload:
+            payload["write_set"] = WriteSet(payload["write_set"])
+
+        if "last_write_set" in payload:
+            payload["last_write_set"] = WriteSet(payload["last_write_set"])
 
         return Event(event_id, fun_address, event_type, payload)
 
