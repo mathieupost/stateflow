@@ -338,6 +338,11 @@ class StatefulOperator(Operator):
             # get the version for this event flow.
             version = store.get_version_for_event_id(event.event_id)
 
+        # Leave a breadcrumb for deadlock detection.
+        path: List[EventAddressTuple] = event.payload.get("path", [])
+        path.append(EventAddressTuple(event.event_id, current_address))
+        event.payload["path"] = path
+
         # Initial node
         node, is_last = flow_graph.current_node, False
         # Initial step parameters
@@ -351,7 +356,6 @@ class StatefulOperator(Operator):
             # Update the next node.
             node = flow_graph.current_node
             is_last = isinstance(node, ReturnNode) and node.is_last()
-
 
         if is_last:
             store.waiting_for = None
