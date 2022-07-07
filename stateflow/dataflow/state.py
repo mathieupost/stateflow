@@ -191,7 +191,7 @@ class Store:
         :return: the new version.
         """
         # Add 1 to the currently highest version id
-        new_id = max(self.encoded_versions.keys()) + 1
+        new_id = self.get_highest_version_id() + 1
 
         # Use at least the last committed version id as parent id
         if min_parent_id < self.last_committed_version_id:
@@ -230,6 +230,13 @@ class Store:
         :return: the last committed version.
         """
         return self.get_version(self.last_committed_version_id)
+
+    def get_highest_version_id(self) -> int:
+        """Gets the highest version id.
+
+        :return: the highest version id.
+        """
+        return max(self.encoded_versions.keys())
 
     def get_version_for_event_id(self, event_id: str) -> Version:
         """Gets the version for the given event id.
