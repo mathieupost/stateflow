@@ -444,7 +444,10 @@ class StatefulOperator(Operator):
                 del store.event_version_map[event.event_id]
                 serialized_event = self.serializer.serialize_event(event)
                 store.queue.append(serialized_event)
-                yield from self._handle_deadlock_check(event, store)
+                if "path" in event.payload:
+                    # Only if we have started the transaction in a previous
+                    # operator, we need to check if we are in a deadlock.
+                    yield from self._handle_deadlock_check(event, store)
                 return
             # - create a new version
             version, is_consistent = self._create_version(event, store, min_parent_id)
