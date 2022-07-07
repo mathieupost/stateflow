@@ -80,7 +80,7 @@ class StatefulOperator(Operator):
         elif event_type == EventType.Request.UpdateState:
             yield self._handle_update_state(event, store)
         elif event_type == EventType.Request.CommitState:
-            self._handle_commit_state(event, store)  # Does not emit events
+            yield from self._handle_commit_state(event, store)
         elif event_type == EventType.Request.DeadlockCheck:
             yield from self._handle_deadlock_check(event, store)
         elif event_type == EventType.Request.EventFlow:
@@ -267,17 +267,18 @@ class StatefulOperator(Operator):
         version: Version,
         write_set: WriteSet,
         updated_state: Optional[State] = None,
-    ):
+    ) -> Iterator[Event]:
         version.set_write_set(write_set)
         store.update_version(version, updated_state)
         store.commit_version(version.id)
+        yield from self._handle_queue(store)
 
-    def _handle_commit_state(self, event: Event, store: Store) -> None:
+    def _handle_commit_state(self, event: Event, store: Store) -> Iterator[Event]:
         version = store.get_version_for_event_id(event.event_id)
         if version.parent_id < store.last_committed_version_id:
             print("New version is committed before this commit was handled!")
         write_set = event.payload["write_set"]
-        self._commit(store, version, write_set)
+        yield from self._commit(store, version, write_set)
 
     def _create_deadlock_check_event(
         self, cur_addr: FunctionAddress, event: Event, store: Store
@@ -466,18 +467,20 @@ class StatefulOperator(Operator):
 
         if is_last:
             store.waiting_for = None
-            # Commit if this was the last node in the flow
-            self._commit(store, version, write_set, updated_state)
             # And yield CommitState events for all other involved operators.
             yield from self._generate_commit_events(event)
+            # Return result.
+            yield event
+            # Commit if this was the last node in the flow
+            yield from self._commit(store, version, write_set, updated_state)
         else:
             # Set waiting_for to the next operator in the flow.
             store.waiting_for = EventAddressTuple(event.event_id, node.fun_addr)
             # Update the version otherwise.
             store.update_version(version, updated_state)
+            # Continue the event flow in the next operator.
+            yield event
 
-        # Continue the event flow in the next operator.
-        yield event
         return
 
     def _handle_queue(self, store: Store) -> Iterator[Event]:
