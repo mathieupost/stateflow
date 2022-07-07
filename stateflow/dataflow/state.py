@@ -254,6 +254,9 @@ class Store:
         :param event_id: the id of the event to create the corresponding version for.
         :return: the version for the given event id.
         """
+        if event_id in self.event_version_map:
+            # Delete version if it already exists from a previous attempt.
+            self.delete_version_for_event_id(event_id)
         version = self.create_version(min_parent_id)
         self.event_version_map[event_id] = version.id
         return version
