@@ -385,21 +385,18 @@ class StatefulOperator(Operator):
         :param event: the event to retry.
         :return: the retried event.
         """
+        payload = {}
+        # Set or increase the retry count.
+        payload["retries"] = event.payload.get("retries", 0) + 1
         # Reset the EventFlowGraph
         flow_graph: EventFlowGraph = event.payload["flow"]
         flow_graph.reset()
-        # Pass the last_write_set to the event, so that it can use it to
-        # determine the minimum parent versions of operators.
-        last_write_set = event.payload["last_write_set"]
-        # And set or increase the retry count.
-        retries = event.payload.get("retries", 0) + 1
-        return event.copy(
-            payload={
-                "flow": flow_graph,
-                "last_write_set": last_write_set,
-                "retries": retries,
-            }
-        )
+        payload["flow"] = flow_graph
+        if "last_write_set" in event.payload:
+            # Pass the last_write_set to the event, so that it can use it to
+            # determine the minimum parent versions of operators.
+            payload["last_write_set"] = event.payload["last_write_set"]
+        return event.copy(payload=payload)
 
     def _create_version(
         self, event: Event, store: Store, min_parent_id: int
