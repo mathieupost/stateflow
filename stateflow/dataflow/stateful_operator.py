@@ -337,11 +337,8 @@ class StatefulOperator(Operator):
                 # waiting for, we stop waiting for it.
                 store.waiting_for = None
                 store.delete_version_for_event_id(abort_event_id)
-                if len(store.queue) > 0:
-                    # And continue with the next event in the queue, if any.
-                    serialized_event = store.queue.pop()
-                    event = self.serializer.deserialize_event(serialized_event)
-                    yield from self._handle_event_flow(event, store)
+                # Continue with the next event from the queue.
+                yield from self._handle_queue(store)
             else:
                 # Otherwise, we remove the event from the queue and retry
                 # it, if it is there.
@@ -482,6 +479,13 @@ class StatefulOperator(Operator):
         # Continue the event flow in the next operator.
         yield event
         return
+
+    def _handle_queue(self, store: Store) -> Iterator[Event]:
+        if len(store.queue) > 0:
+            # And continue with the next event in the queue, if any.
+            serialized_event = store.queue.pop(0)
+            event = self.serializer.deserialize_event(serialized_event)
+            yield from self._handle_event_flow(event, store)
 
     def _generate_commit_events(self, event: Event) -> Iterator[Event]:
         write_set = event.payload["write_set"]
