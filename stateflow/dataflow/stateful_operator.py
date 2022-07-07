@@ -1,3 +1,4 @@
+from enum import Enum
 from typing import Iterator, List, NewType, Optional, Tuple
 
 from stateflow.dataflow.address import FunctionAddress
@@ -15,6 +16,24 @@ from stateflow.wrappers.class_wrapper import (
 from stateflow.wrappers.meta_wrapper import MetaWrapper
 
 NoType = NewType("NoType", None)
+
+
+class IsolationType(Enum):
+    Abort = "Abort"  # Abort the current transaction if an operator is in an unfinished transaction.
+    Queue = "Queue"  # Queue the current transaction if an operator is in an unfinished transaction.
+    TwoPhaseCommit = "2PC"  # Use two phase commit to commit transactions.
+
+    def is_abort(self) -> bool:
+        return self == IsolationType.Abort
+
+    def is_queue(self) -> bool:
+        return self == IsolationType.Queue
+
+    def is_2pc(self) -> bool:
+        return self == IsolationType.TwoPhaseCommit
+
+
+IsolationMode = IsolationType.Queue
 
 
 class StatefulOperator(Operator):
@@ -431,17 +450,23 @@ class StatefulOperator(Operator):
         write_set: WriteSet = event.payload.get("write_set", WriteSet())
         last_write_set: WriteSet = event.payload.get("last_write_set", WriteSet())
         if not write_set.address_exists(current_address):
-            # If the current operator is not in the write_set, it is not
-            # yet used in the event flow and we need to:
-            # - check if a minimum version is set in the last_write_set
+            # If the current operator is not in the write_set, it is not used in
+            # the current attempt to execute the event flow and we need to:
+            # - to check if a minimum version is set in the last_write_set
             min_parent_id = last_write_set.get_address(current_address)
-            # - create a new version
-            version = store.create_version_for_event_id(event.event_id, min_parent_id)
-            if version.id - version.parent_id > 1:
-                # The version was not created from last version, so another
-                # operation is already in progress. Delete the created version
-                # and add the event to the queue.
-                del store.event_version_map[event.event_id]
+            has_unfinished_transaction = store.get_highest_version_id() > max(
+                min_parent_id, store.last_committed_version_id
+            )
+            if has_unfinished_transaction and IsolationMode.is_abort():
+                # If there is an unfinished transaction, we can't continue
+                # because the other transaction should finish first. We'll abort
+                # the event and try again.
+                yield self._reset_and_retry_event(event)
+                return
+            if has_unfinished_transaction and IsolationMode.is_queue():
+                # If there is an unfinished transaction, we can't continue
+                # because the other transaction should finish first. We'll add
+                # the event to the queue and check if we are in a deadlock.
                 serialized_event = self.serializer.serialize_event(event)
                 store.queue.append(serialized_event)
                 if "path" in event.payload:
