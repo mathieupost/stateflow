@@ -463,6 +463,194 @@ class TestCommitState:
 
         ########## DEADLOCK ##########
 
+    def test__isolation_queue__deadlock_triple(
+        self,
+        user1: "Model",
+        user2: "Model",
+        user3: "Model",
+        transfer_balance_flow: List[EventFlowNode],
+    ):
+        stateful_operator.IsolationMode = IsolationType.Queue
+
+        # Create events that will cause deadlock.
+        # Transfer balance from user1 -> user2
+        event1 = transfer_balance_event(user1, user2, transfer_balance_flow)
+        # Transfer balance from user2 -> user3
+        event2 = transfer_balance_event(user2, user3, transfer_balance_flow)
+        # Transfer balance from user3 -> user1
+        event3 = transfer_balance_event(user3, user1, transfer_balance_flow)
+
+        # Set transaction/event id's. Lowest id should be aborted
+        t1_id = event1.event_id = "11111111-1111-1111-1111-111111111111"
+        t2_id = event2.event_id = "22222222-2222-2222-2222-222222222222"
+        t3_id = event3.event_id = "33333333-3333-3333-3333-333333333333"
+
+        # Shorthands for asserting paths.
+        # "user1_tr1" => "user1 is waiting for t1", etc.
+        user1_t1 = EventAddressTuple(t1_id, user1.fun_addr)
+        user2_t2 = EventAddressTuple(t2_id, user2.fun_addr)
+        user3_t3 = EventAddressTuple(t3_id, user3.fun_addr)
+
+        # Begin transaction in all 3 users
+        t1_events = self.step(user1, event1)
+        t2_events = self.step(user2, event2)
+        t3_events = self.step(user3, event3)
+
+        # Assert updated path
+        assert len(t1_events[0].payload["path"]) == 1
+        assert len(t2_events[0].payload["path"]) == 1
+        assert len(t3_events[0].payload["path"]) == 1
+        assert t1_events[0].payload["path"][-1] == user1_t1
+        assert t2_events[0].payload["path"][-1] == user2_t2
+        assert t3_events[0].payload["path"][-1] == user3_t3
+
+        # Continue tansaction in receiving users
+        t1_events = self.step(user2, t1_events[0])
+        t2_events = self.step(user3, t2_events[0])
+        t3_events = self.step(user1, t3_events[0])
+
+        # Confirm all tansactions detected a deadlock
+        assert t1_events[0].event_type == EventType.Request.DeadlockCheck
+        assert t2_events[0].event_type == EventType.Request.DeadlockCheck
+        assert t3_events[0].event_type == EventType.Request.DeadlockCheck
+
+        # Assert updated path
+        assert len(t1_events[0].payload["path"]) == 2
+        assert len(t2_events[0].payload["path"]) == 2
+        assert len(t3_events[0].payload["path"]) == 2
+        assert t1_events[0].payload["path"][-1] == user2_t2
+        assert t2_events[0].payload["path"][-1] == user3_t3
+        assert t3_events[0].payload["path"][-1] == user1_t1
+
+        # Continue deadlock check in the operator the previous operator was
+        # waiting for.
+        t1_events = self.step(user3, t1_events[0])
+        t2_events = self.step(user1, t2_events[0])
+        t3_events = self.step(user2, t3_events[0])
+
+        # t1 should be aborted.
+        assert len(t1_events) == 0
+        # t2 should abort t1 in user1 and pop t3 from the queue and continue
+        # with that.
+        assert len(t2_events) == 1
+        assert t2_events[0].event_id == t3_id
+        event3 = t2_events[0]
+        assert event3.payload["flow"].current_node.fun_addr == user3.fun_addr
+        # t3 should pop t1 from the queue and reset it to retry.
+        assert len(t3_events) == 1
+        assert t3_events[0].event_id == t1_id
+        event1 = t3_events[0]
+        assert event1.payload["flow"].current_node.fun_addr == user1.fun_addr
+        assert event1.payload["retries"] == 1
+
+        # The transactions will now divert in their behaviour, so we'll use an
+        # EventBus comment to keep track of the events.
+
+        ########## EventBus = [event3, event1] ##########
+
+        # Continue t3 (which was popped from the queue by t2) in user3.
+        t3_events = self.step(user3, event3)
+
+        # Should finish t3 and continue with t2 from the queue.
+        assert len(t3_events) == 3
+        # Commit t3 in user1.
+        assert t3_events[0].event_id == t3_id
+        t3_commit_user1 = t3_events[0]
+        assert t3_commit_user1.event_type == EventType.Request.CommitState
+        assert t3_commit_user1.fun_address == user1.fun_addr
+        # Return t3 result to client.
+        assert t3_events[1].event_id == t3_id
+        assert t3_events[1].event_type == EventType.Reply.SuccessfulInvocation
+        # Continue t2 in user2.
+        assert t3_events[2].event_id == t2_id
+        event2 = t3_events[2]
+        assert event2.event_type == EventType.Request.EventFlow
+        assert event2.payload["flow"].current_node.fun_addr == user2.fun_addr
+
+        ########## EventBus = [event1, t3_commit_user1, event2] ##########
+
+        # Retry t1 (which was popped from the queue by t3) in user1.
+        t1_events = self.step(user1, event1)
+
+        # t1 is queued again because user1 still has to commit. But no
+        # DeadlockCheck should be sent, since the path is still empty. I.e. no
+        # other operators are waiting for t1.
+        assert len(t1_events) == 0
+
+        ########## EventBus = [t3_commit_user1, event2] ##########
+
+        # Commit t3 in user1.
+        t3_events = self.step(user1, t3_commit_user1)
+
+        # Committed t3 and should pop t1 from the queue.
+        assert len(t3_events) == 1
+        assert t3_events[0].event_id == t1_id
+        event1 = t3_events[0]
+        assert event1.event_type == EventType.Request.EventFlow
+        assert event1.payload["flow"].current_node.fun_addr == user2.fun_addr
+
+        ########## EventBus = [event2, event1] ##########
+
+        # Continue t2 in user2.
+        t2_events = self.step(user2, event2)
+
+        # Should finish t2.
+        assert len(t2_events) == 2
+        # Commit t2 in user3.
+        assert t2_events[0].event_id == t2_id
+        t2_commit_user3 = t2_events[0]
+        assert t2_commit_user3.event_type == EventType.Request.CommitState
+        assert t2_commit_user3.fun_address == user3.fun_addr
+        # Return t2 result to client.
+        assert t2_events[1].event_id == t2_id
+        assert t2_events[1].event_type == EventType.Reply.SuccessfulInvocation
+
+        ########## EventBus = [event1, t2_commit_user3] ##########
+
+        # Continue t1 in user2.
+        t1_events = self.step(user2, event1)
+
+        # Should continue t1 in user1.
+        assert len(t1_events) == 1
+        assert t1_events[0].event_id == t1_id
+        event1 = t1_events[0]
+        assert event1.event_type == EventType.Request.EventFlow
+        assert event1.payload["flow"].current_node.fun_addr == user1.fun_addr
+
+        ########## EventBus = [t2_commit_user3, event1] ##########
+
+        # Commit t2 in user3.
+        t2_events = self.step(user3, t2_commit_user3)
+
+        # Committed t2
+        assert len(t2_events) == 0
+
+        ########## EventBus = [event1] ##########
+
+        # Continue t1 in user1.
+        t1_events = self.step(user1, event1)
+
+        # Should finish t1.
+        assert len(t1_events) == 2
+        # Commit t1 in user2.
+        assert t1_events[0].event_id == t1_id
+        t1_commit_user2 = t1_events[0]
+        assert t1_commit_user2.event_type == EventType.Request.CommitState
+        assert t1_commit_user2.fun_address == user2.fun_addr
+        # Return t1 result to client.
+        assert t1_events[1].event_id == t1_id
+        assert t1_events[1].event_type == EventType.Reply.SuccessfulInvocation
+
+        ########## EventBus = [t1_commit_user2] ##########
+
+        # Commit t1 in user2.
+        t1_events = self.step(user2, t1_commit_user2)
+
+        # Committed t1
+        assert len(t1_events) == 0
+
+        ########## EventBus = [] ##########
+
 
 @pytest.fixture(scope="class")
 def flow() -> Dataflow:
@@ -479,6 +667,12 @@ def user1(flow: Dataflow):
 def user2(flow: Dataflow):
     initial_state = {"username": "user2", "balance": 10, "items": []}
     return Model(flow.operators[1], "user2", initial_state)
+
+
+@pytest.fixture(scope="function")
+def user3(flow: Dataflow):
+    initial_state = {"username": "user3", "balance": 10, "items": []}
+    return Model(flow.operators[1], "user3", initial_state)
 
 
 @pytest.fixture(scope="class")
