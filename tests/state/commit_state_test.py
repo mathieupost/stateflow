@@ -21,8 +21,11 @@ from stateflow.serialization.json_serde import JsonSerializer
 from tests.common.common_classes import stateflow
 
 
-@pytest.mark.usefixtures("setup_ingress_egress")
 class TestCommitState:
+    serializer = JsonSerializer()
+    ingress = IngressRouter(serializer)
+    egress = EgressRouter(serializer, serialize_on_return=False)
+
     def step(self, model: "Model", event: Event) -> List[Event]:
         operator = model.operator
         ingress: IngressRouter = self.ingress
@@ -409,13 +412,6 @@ def transfer_balance_event2(sender, receiver, transfer_balance_flow):
 def transfer_balance_event_reverse(sender, receiver, transfer_balance_flow):
     # Swap sender and receiver
     return transfer_balance_event(receiver, sender, transfer_balance_flow)
-
-
-@pytest.fixture(scope="class")
-def setup_ingress_egress(request):
-    serializer = JsonSerializer()
-    request.cls.ingress = IngressRouter(serializer)
-    request.cls.egress = EgressRouter(serializer, serialize_on_return=False)
 
 
 class Model:
