@@ -1,8 +1,9 @@
 import copy
-from typing import List
 import uuid
+from typing import List
 
 import pytest
+from stateflow.dataflow import stateful_operator
 from stateflow.dataflow.address import FunctionAddress, FunctionType
 from stateflow.dataflow.args import Arguments
 from stateflow.dataflow.dataflow import Dataflow, EgressRouter, IngressRouter, Operator
@@ -15,7 +16,10 @@ from stateflow.dataflow.event_flow import (
     InvokeSplitFun,
 )
 from stateflow.dataflow.state import Store
-from stateflow.dataflow.stateful_operator import StatefulOperator
+from stateflow.dataflow.stateful_operator import (
+    IsolationType,
+    StatefulOperator,
+)
 from stateflow.descriptors.class_descriptor import ClassDescriptor
 from stateflow.serialization.json_serde import JsonSerializer
 from tests.common.common_classes import stateflow
@@ -48,9 +52,16 @@ class TestCommitState:
 
         return events
 
-    def test_commit_state(
-        self, sender: "Model", receiver: "Model", transfer_balance_event1
+    @pytest.mark.parametrize("isolation_mode", IsolationType)
+    def test__all_isolation__single_transaction(
+        self,
+        isolation_mode: IsolationType,
+        sender: "Model",
+        receiver: "Model",
+        transfer_balance_event1,
     ):
+        stateful_operator.IsolationMode = isolation_mode
+
         initial_state_sndr = sender.store.get_last_committed_version().state.get()
         initial_state_rcvr = receiver.store.get_last_committed_version().state.get()
 
@@ -128,13 +139,17 @@ class TestCommitState:
     # the receiver's state is committed, the sender starts another transfer.
     # Since the sender's state is committed before the 2nd transfer starts, the
     # 2nd transfer can detect and use the new receiver state.
-    def test_commit_state_concurrent(
+    @pytest.mark.parametrize("isolation_mode", IsolationType)
+    def test__all_isolation__read_skew__direct_detect(
         self,
+        isolation_mode: IsolationType,
         sender: "Model",
         receiver: "Model",
         transfer_balance_event1: Event,
         transfer_balance_event2: Event,
     ):
+        stateful_operator.IsolationMode = isolation_mode
+
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
         tr1_events = self.step(sender, transfer_balance_event1)
@@ -194,13 +209,15 @@ class TestCommitState:
         assert receiver.store.last_committed_version_id == 2
         ########## End 1st transaction ##########
 
-    def test_commit_state_concurrent_with_retry(
+    def test__abort_isolation__transfer_same(
         self,
         sender: "Model",
         receiver: "Model",
         transfer_balance_event1: Event,
         transfer_balance_event2: Event,
     ):
+        stateful_operator.IsolationMode = IsolationType.Abort
+
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
         tr1_events = self.step(sender, transfer_balance_event1)
@@ -257,13 +274,15 @@ class TestCommitState:
             assert receiver.store.last_committed_version_id == 2
             ########## End 2nd transaction ##########
 
-    def test_commit_state_concurrent_reverse(
+    def test__abort_isolation__transfer_reverse(
         self,
         sender: "Model",
         receiver: "Model",
         transfer_balance_event1: Event,
         transfer_balance_event_reverse: Event,
     ):
+        stateful_operator.IsolationMode = IsolationType.Abort
+
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
         tr1_events = self.step(sender, transfer_balance_event1)
@@ -317,13 +336,15 @@ class TestCommitState:
             assert sender.store.last_committed_version_id == 2
             ########## End 2nd transaction ##########
 
-    def test_commit_state_concurrent_reverse_deadlock(
+    def test__isolation_queue__deadlock(
         self,
         sender: "Model",
         receiver: "Model",
         transfer_balance_event1: Event,
         transfer_balance_event_reverse: Event,
     ):
+        stateful_operator.IsolationMode = IsolationType.Queue
+
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
         tr1_events = self.step(sender, transfer_balance_event1)
