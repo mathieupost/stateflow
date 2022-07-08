@@ -12,10 +12,9 @@ from stateflow.dataflow.event_flow import (
     EventFlowGraph,
     EventFlowNode,
     InternalClassRef,
-    InvokeExternal,
     InvokeSplitFun,
 )
-from stateflow.dataflow.state import Store
+from stateflow.dataflow.state import EventAddressTuple, Store, WriteSet
 from stateflow.dataflow.stateful_operator import (
     IsolationType,
     StatefulOperator,
@@ -345,31 +344,50 @@ class TestCommitState:
     ):
         stateful_operator.IsolationMode = IsolationType.Queue
 
+        # Set the event id to a value that will always be higher than a
+        # generated uuid, because the event with the lowest id will be aborted.
+        tr1_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        transfer_balance_event1.event_id = tr1_id
+
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(sender).transfer_balance_0(...)
         tr1_events = self.step(sender, transfer_balance_event1)
+        # Sender waits for event with tr1_id to return from receiver
+        assert sender.store.waiting_for == EventAddressTuple(tr1_id, receiver.fun_addr)
 
         if True:  # indented for readability
             ########## Begin 2nd transaction ##########
+            tr2_id = transfer_balance_event_reverse.event_id
             # INVOKE_SPLIT_FUN User(receiver).transfer_balance_0(...)
             tr2_events = self.step(receiver, transfer_balance_event_reverse)
+            # Receiver waits for event with tr2_id to return from sender
+            assert receiver.store.waiting_for == EventAddressTuple(
+                tr2_id, sender.fun_addr
+            )
 
         ########## Resume 1st transaction ##########
         # INVOKE_EXTERNAL User(receiver).update_balance(...)
         tr1_events = self.step(receiver, tr1_events[0])
-        assert tr1_events[0].payload["retries"] == 1
-        current_node: EventFlowNode = tr1_events[0].payload["flow"].current_node
-        assert isinstance(current_node, InvokeExternal)
-        assert current_node.fun_name == "update_balance"
+        # Should've detected and resolved the deadlock check locally and
+        # continue with the transaction.
+        assert tr1_events[0].event_type == EventType.Request.EventFlow
+        assert tr1_events[0].payload["flow"].current_node.previous > 0
+        assert tr1_events[0].payload.get("retries", 0) == 0  # Not retried
 
         if True:
             ########## Resume 2nd transaction ##########
             # INVOKE_EXTERNAL User(sender).update_balance(...)
             tr2_events = self.step(sender, tr2_events[0])
-            assert tr2_events[0].payload["retries"] == 1
-            current_node: EventFlowNode = tr2_events[0].payload["flow"].current_node
-            assert isinstance(current_node, InvokeExternal)
-            assert current_node.fun_name == "update_balance"
+            # Should've detected and resolved the deadlock check locally and
+            # resetted the transaction to try again.
+            assert tr2_events[0].event_type == EventType.Request.EventFlow
+            assert tr2_events[0].payload.get("retries", 0) == 1
+            assert (
+                tr2_events[0].payload["flow"].current_node.previous == 0
+            )  # Back at the start
+            assert tr2_events[0].payload.get("last_write_set", WriteSet()) == {
+                "global": {"User": {"receiver": 0}}
+            }
 
         ########## DEADLOCK ##########
 
