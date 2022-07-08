@@ -437,6 +437,8 @@ class StatefulOperator(Operator):
                     is_consistent = False
             # - update the last_write_set to include the other operators
             last_write_set.add(ns, o, k, min_parent_version)
+        if not is_consistent:
+            del store.event_version_map[event.event_id]
         event.payload["last_write_set"] = last_write_set
         return version, is_consistent
 
