@@ -208,6 +208,80 @@ class TestCommitState:
         assert user2.store.last_committed_version_id == 2
         ########## End 1st transaction ##########
 
+    def test__all_isolation__read_skew__late_detect(
+        self,
+        user1: "Model",
+        user2: "Model",
+        transfer_balance_event1: Event,
+        transfer_balance_event_reverse: Event,
+    ):
+        stateful_operator.IsolationMode = IsolationType.TwoPhaseCommit
+
+        ########## Begin 1st transaction ##########
+        # INVOKE_SPLIT_FUN User(user1).transfer_balance_0(...)
+        tr1_events = self.step(user1, transfer_balance_event1)
+
+        # INVOKE_EXTERNAL User(user2).update_balance(...)
+        tr1_events = self.step(user2, tr1_events[0])
+
+        # INVOKE_SPLIT_FUN User(user1).transfer_balance_7(...)
+        tr1_events = self.step(user1, tr1_events[0])
+        # User(user1) is committed now.
+        assert user1.store.last_committed_version_id == 1
+
+        if True:  # indented for readability
+            ########## Begin 2nd transaction ##########
+            tr2_event_id = transfer_balance_event_reverse.event_id
+
+            # INVOKE_SPLIT_FUN User(user2).transfer_balance_0(...)
+            # Doesn't get uncommitted version from 1st transaction.
+            tr2_events = self.step(user2, transfer_balance_event_reverse)
+            u2_version = user2.store.get_version_for_event_id(tr2_event_id)
+            assert user2.store.last_committed_version_id == 0
+            assert u2_version.parent_id == 0  # Created from last committed version.
+            assert u2_version.id == 2
+
+            # INVOKE_EXTERNAL User(user1).update_balance(...) Should detect Read
+            # Skew and retry the transaction, because of detected new version
+            # (user2: 1) in the user1's last_write_set.
+            tr2_events = self.step(user1, tr2_events[0])
+            assert tr2_events[0].payload["retries"] == 1
+            assert tr2_events[0].payload["last_write_set"] == {
+                "global": {
+                    "User": {
+                        "user2": 1,
+                        "user1": 1,
+                    }
+                }
+            }
+
+            # INVOKE_SPLIT_FUN User(user2).transfer_balance_0(...)
+            # Gets uncommitted version from 1st transaction.
+            tr2_events = self.step(user2, tr2_events[0])
+            u2_version = user2.store.get_version_for_event_id(tr2_event_id)
+            assert user2.store.last_committed_version_id == 0
+            assert u2_version.parent_id == 1  # Created from uncomitted version.
+            assert u2_version.id == 2
+
+            # INVOKE_EXTERNAL User(user1).update_balance(...)
+            tr2_events = self.step(user1, tr2_events[0])
+
+            # INVOKE_SPLIT_FUN User(user2).transfer_balance_7(...)
+            tr2_events = self.step(user2, tr2_events[0])
+            # User(user2) is committed now.
+            assert user2.store.last_committed_version_id == 2
+
+            # COMMIT_STATE User(user1)
+            _ = self.step(user1, tr2_events[0])
+            assert user1.store.last_committed_version_id == 2
+            ########## End 2nd transaction ##########
+
+        # COMMIT_STATE User(user2)
+        _ = self.step(user2, tr1_events[0])
+        # Check if the CommitState event did NOT overwrite the committed version.
+        assert user2.store.last_committed_version_id == 2
+        ########## End 1st transaction ##########
+
     def test__abort_isolation__transfer_same(
         self,
         user1: "Model",
