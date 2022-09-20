@@ -1,4 +1,4 @@
-from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Tuple
+from typing import Any, Dict, Iterator, List, NamedTuple, Optional, Tuple, TypeVar, Union
 
 import jsonpickle
 from stateflow.dataflow.address import FunctionAddress, FunctionType
@@ -36,14 +36,17 @@ class State:
         return State(self._data.copy(), version_id)
 
 
-class WriteSet(dict):
+T = TypeVar("T")
+
+
+class AddressSet(Dict[str, Dict[str, Dict[str, T]]]):
     def __init__(self, *args, **kwargs):
-        super(WriteSet, self).__init__(*args, **kwargs)
+        super(AddressSet, self).__init__(*args, **kwargs)
 
-    def add(self, namespace: str, operator: str, key: str, version: int):
-        """Adds the version for the given namespace, operator and key.
+    def add(self, namespace: str, operator: str, key: str, value: T):
+        """Adds the value for the given namespace, operator and key.
 
-        If the version already exists, the maximum version is used.
+        If the value already exists, the maximum value is used.
         """
         if not namespace in self:
             self[namespace] = dict()
@@ -52,25 +55,25 @@ class WriteSet(dict):
             self[namespace][operator] = dict()
 
         if not key in self[namespace][operator]:
-            self[namespace][operator][key] = version
+            self[namespace][operator][key] = value
         else:
             current = self[namespace][operator][key]
-            self[namespace][operator][key] = max(current, version)
+            self[namespace][operator][key] = max(current, value)
 
-    def add_address(self, address: FunctionAddress, version: int):
-        """Adds the version of the given FunctionAddress to the set.
+    def add_address(self, address: FunctionAddress, value: T):
+        """Adds the value of the given FunctionAddress to the set.
 
-        If the version already exists, the maximum version is used.
+        If the value already exists, the maximum value is used.
         """
         namespace = address.function_type.namespace
         operator = address.function_type.name
         key = address.key or ""
-        self.add(namespace, operator, key, version)
+        self.add(namespace, operator, key, value)
 
-    def get(self, namespace: str, operator: str, key: str) -> int:
-        """Returns the version for the given namespace, operator and key.
+    def get(self, namespace: str, operator: str, key: str) -> T:
+        """Returns the value for the given namespace, operator and key.
 
-        If the version does not exist, -1 is returned.
+        If the value does not exist, -1 is returned.
         """
         if namespace not in self:
             return -1
@@ -83,26 +86,32 @@ class WriteSet(dict):
 
         return self[namespace][operator][key]
 
-    def get_address(self, address: FunctionAddress) -> int:
-        """Returns the version for the given FunctionAddress.
+    def get_address(self, address: FunctionAddress) -> T:
+        """Returns the value for the given FunctionAddress.
 
-        If the version does not exist, -1 is returned.
+        If the value does not exist, -1 is returned.
         """
         namespace = address.function_type.namespace
         operator = address.function_type.name
         key = address.key or ""
         return self.get(namespace, operator, key)
 
+    def get_one(self) -> Tuple[FunctionAddress, T]:
+        for namespace, operator, key, value in self.iterate():
+            ft = FunctionType(namespace, operator, True)
+            fa = FunctionAddress(ft, key)
+            return fa, value
+
     def exists(self, namespace: str, operator: str, key: str) -> bool:
-        """Returns True if a version for the given namespace, operator and key exists."""
+        """Returns True if a value for the given namespace, operator and key exists."""
         return self.get(namespace, operator, key) != -1
 
     def address_exists(self, address: FunctionAddress) -> bool:
-        """Returns True if a version for the given FunctionAddress exists."""
+        """Returns True if a value for the given FunctionAddress exists."""
         return self.get_address(address) != -1
 
-    def iterate(self) -> Iterator[Tuple[str, str, str, int]]:
-        """Iterates over all (namespace, operator, key, version) tuples in the WriteSet."""
+    def iterate(self) -> Iterator[Tuple[str, str, str, T]]:
+        """Iterates over all (namespace, operator, key, value) tuples in the WriteSet."""
         for namespace in self:
             for operator in self[namespace]:
                 for key in self[namespace][operator]:
@@ -114,6 +123,10 @@ class WriteSet(dict):
             ft = FunctionType(namespace, operator, True)
             fa = FunctionAddress(ft, key)
             yield fa
+
+
+WriteSet = AddressSet[int]
+AddressEventSet = AddressSet[Union[bool, str]]
 
 
 class Version:
