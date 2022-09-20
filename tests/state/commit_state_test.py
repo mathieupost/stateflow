@@ -238,7 +238,8 @@ class TestCommitState:
             tr2_events = self.step(user2, transfer_balance_event_reverse)
             u2_version = user2.store.get_version_for_event_id(tr2_event_id)
             assert user2.store.last_committed_version_id == 0
-            assert u2_version.parent_id == 0  # Created from last committed version.
+            # Created from last committed version.
+            assert u2_version.parent_id == 0
             assert u2_version.id == 2
 
             # INVOKE_EXTERNAL User(user1).update_balance(...) Should detect Read
@@ -260,7 +261,8 @@ class TestCommitState:
             tr2_events = self.step(user2, tr2_events[0])
             u2_version = user2.store.get_version_for_event_id(tr2_event_id)
             assert user2.store.last_committed_version_id == 0
-            assert u2_version.parent_id == 1  # Created from uncomitted version.
+            # Created from uncomitted version.
+            assert u2_version.parent_id == 1
             assert u2_version.id == 2
 
             # INVOKE_EXTERNAL User(user1).update_balance(...)
@@ -427,7 +429,7 @@ class TestCommitState:
         # INVOKE_SPLIT_FUN User(user1).transfer_balance_0(...)
         tr1_events = self.step(user1, transfer_balance_event1)
         # User1 waits for event with tr1_id to return from user2
-        assert user1.store.waiting_for == EventAddressTuple(tr1_id, user2.fun_addr)
+        assert user1.store.waiting_for.get_one() == (user2.fun_addr, tr1_id)
 
         if True:  # indented for readability
             ########## Begin 2nd transaction ##########
@@ -435,7 +437,7 @@ class TestCommitState:
             # INVOKE_SPLIT_FUN User(user2).transfer_balance_0(...)
             tr2_events = self.step(user2, transfer_balance_event_reverse)
             # User2 waits for event with tr2_id to return from user1
-            assert user2.store.waiting_for == EventAddressTuple(tr2_id, user1.fun_addr)
+            assert user2.store.waiting_for.get_one() == (user1.fun_addr, tr2_id)
 
         ########## Resume 1st transaction ##########
         # INVOKE_EXTERNAL User(user2).update_balance(...)

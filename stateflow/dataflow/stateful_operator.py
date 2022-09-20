@@ -5,7 +5,7 @@ from stateflow.dataflow.address import FunctionAddress
 from stateflow.dataflow.dataflow import Edge, EventType, FunctionType, Operator
 from stateflow.dataflow.event import Event
 from stateflow.dataflow.event_flow import EventFlowGraph, ReturnNode
-from stateflow.dataflow.state import EventAddressTuple, State, Store, Version, WriteSet
+from stateflow.dataflow.state import AddressEventSet, EventAddressTuple, State, Store, Version, WriteSet
 from stateflow.serialization.pickle_serializer import PickleSerializer, SerDe
 from stateflow.util.generator_wrapper import WrappedGenerator, keep_return_value
 from stateflow.wrappers.class_wrapper import (
@@ -309,8 +309,8 @@ class StatefulOperator(Operator):
         :param store: the current state.
         :return: the outgoing event.
         """
-        assert store.waiting_for is not None
-        wf_event_id, wf_addr = store.waiting_for
+        assert len(store.waiting_for) == 1
+        wf_addr, wf_event_id = store.waiting_for.get_one()
         path: List[EventAddressTuple] = event.payload.get("path", [])
         path.append(EventAddressTuple(wf_event_id, cur_addr))
         return event.copy(
@@ -329,7 +329,7 @@ class StatefulOperator(Operator):
         :param state: the current state.
         :return: None.
         """
-        if store.waiting_for is None:
+        if len(store.waiting_for) == 0:
             # We are not waiting for anything, so no need to handle deadlocks!
             return
 
@@ -338,7 +338,7 @@ class StatefulOperator(Operator):
         else:
             cur_addr = event.fun_address
 
-        wf_event_id, wf_addr = store.waiting_for
+        wf_addr, wf_event_id = store.waiting_for.get_one()
         path: List[EventAddressTuple] = event.payload.get("path", [])
         for i in range(len(path) - 1, -1, -1):  # traverse backwards
             _, addr = path[i]
@@ -355,7 +355,7 @@ class StatefulOperator(Operator):
             if abort_event_id == wf_event_id:
                 # If that event is the event that the current operator is
                 # waiting for, we stop waiting for it.
-                store.waiting_for = None
+                store.waiting_for = AddressEventSet()
                 store.delete_version_for_event_id(abort_event_id)
                 # Continue with the next event from the queue.
                 yield from self._handle_queue(store)
@@ -505,7 +505,7 @@ class StatefulOperator(Operator):
             is_last = isinstance(node, ReturnNode) and node.is_last()
 
         if is_last:
-            store.waiting_for = None
+            store.waiting_for = AddressEventSet()
             # And yield CommitState events for all other involved operators.
             yield from self._generate_commit_events(event)
             # Return result.
@@ -514,7 +514,7 @@ class StatefulOperator(Operator):
             yield from self._commit(store, version, write_set, updated_state)
         else:
             # Set waiting_for to the next operator in the flow.
-            store.waiting_for = EventAddressTuple(event.event_id, node.fun_addr)
+            store.waiting_for.add_address(node.fun_addr, event.event_id)
             # Update the version otherwise.
             store.update_version(version, updated_state)
             # Continue the event flow in the next operator.

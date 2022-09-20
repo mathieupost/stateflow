@@ -3,7 +3,7 @@ import ujson
 from stateflow.dataflow.args import Arguments
 from stateflow.dataflow.event import EventType, FunctionAddress
 from stateflow.dataflow.event_flow import EventFlowGraph
-from stateflow.dataflow.state import EventAddressTuple, Store, WriteSet
+from stateflow.dataflow.state import AddressEventSet, AddressSet, EventAddressTuple, Store, WriteSet
 from stateflow.serialization.serde import Event, SerDe
 
 
@@ -16,7 +16,7 @@ class JsonSerializer(SerDe):
         }
         if len(store.queue) > 0:
             store_dict["queue"] = store.queue
-        if store.waiting_for is not None:
+        if len(store.waiting_for) > 0:
             store_dict["waiting_for"] = store.waiting_for
         return self.serialize_dict(store_dict)
 
@@ -33,9 +33,7 @@ class JsonSerializer(SerDe):
             }
 
         if "waiting_for" in store_dict:
-            store_dict["waiting_for"] = EventAddressTuple.from_dict(
-                store_dict["waiting_for"]
-            )
+            store_dict["waiting_for"] = AddressEventSet(store_dict["waiting_for"])
 
         if type(store_dict) is Store:
             return store_dict

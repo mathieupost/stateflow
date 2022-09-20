@@ -182,7 +182,7 @@ class Store:
             self.last_committed_version_id: int = 0
             self.event_version_map: Dict[str, int] = dict()
             self.queue: List[bytes] = list()
-            self.waiting_for: Optional[EventAddressTuple] = None
+            self.waiting_for: AddressEventSet = AddressEventSet()
 
             initial_version = Version(0, -1, State(initial_state))
             self.update_version(initial_version)
@@ -193,7 +193,7 @@ class Store:
         self.last_committed_version_id: int = data["last_committed_version_id"]
         self.event_version_map: Dict[str, int] = data["event_version_map"]
         self.queue: List[bytes] = data.get("queue", [])
-        self.waiting_for: Optional[EventAddressTuple] = data.get("waiting_for")
+        self.waiting_for: AddressEventSet = data.get("waiting_for", AddressEventSet())
 
     def create_version(self, min_parent_id=-1) -> Version:
         """Create a new version based on the last committed version.
