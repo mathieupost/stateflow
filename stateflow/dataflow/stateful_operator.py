@@ -19,21 +19,25 @@ NoType = NewType("NoType", None)
 
 
 class IsolationType(Enum):
-    Abort = "Abort"  # Abort the current transaction if an operator is in an unfinished transaction.
-    Queue = "Queue"  # Queue the current transaction if an operator is in an unfinished transaction.
-    TwoPhaseCommit = "2PC"  # Use two phase commit to commit transactions.
+    """Enum to different IsolationMode."""
+    ABORT = "Abort"  # Abort the current transaction if an operator is in an unfinished transaction.
+    QUEUE = "Queue"  # Queue the current transaction if an operator is in an unfinished transaction.
+    TWO_PHASE_COMMIT = "2PC"  # Use two phase commit to commit transactions.
 
     def is_abort(self) -> bool:
-        return self == IsolationType.Abort
+        """Helper function to check if the IsolationType is ABORT."""
+        return self == IsolationType.ABORT
 
     def is_queue(self) -> bool:
-        return self == IsolationType.Queue
+        """Helper function to check if the IsolationType is QUEUE."""
+        return self == IsolationType.QUEUE
 
     def is_2pc(self) -> bool:
-        return self == IsolationType.TwoPhaseCommit
+        """Helper function to check if the IsolationType is TWO_PHASE_COMMIT."""
+        return self == IsolationType.TWO_PHASE_COMMIT
 
 
-IsolationMode = IsolationType.Queue
+IsolationMode = IsolationType.QUEUE
 
 
 class StatefulOperator(Operator):
@@ -60,7 +64,8 @@ class StatefulOperator(Operator):
         Moreover, we set the key of the function address.
 
         This event will eventually be propagated to the 'actual' stateful operator,
-        where it will call `handle(event, state)` and subsequently `_handle_create_with_state(event, state)`
+        where it will call `handle(event, state)` and subsequently
+        `_handle_create_with_state(event, state)`.
 
         :param event: the Request.InitClass event.
         :return: the created instance, embedded in an Event.
@@ -68,7 +73,9 @@ class StatefulOperator(Operator):
         args = event.payload["args"]
         res: InvocationResult = self.class_wrapper.init_class(args)
 
+        assert res.return_results is not None
         key: str = res.return_results[0]
+        assert res.updated_state is not None
         created_state: State = res.updated_state
 
         # Set the key and the state of this class.
@@ -113,10 +120,12 @@ class StatefulOperator(Operator):
     ) -> WrappedGenerator[Event, None, Optional[bytes]]:
         """Handles incoming event and current state.
 
-        Depending on the event type, a method is executed or a instance is created, or state is updated, etc.
+        Depending on the event type, a method is executed or a instance is created, or state is
+        updated, etc.
 
         :param event: the incoming event.
-        :param serialized_state: the incoming state (in bytes). If this is None, we assume this 'key' does not exist.
+        :param serialized_state: the incoming state (in bytes). If this is None, we assume this
+            'key' does not exist.
         :return: a generator that yields outgoing events and returns the updated state (in bytes).
         """
 
@@ -129,11 +138,12 @@ class StatefulOperator(Operator):
 
         if serialized_state:  # If state exists, we can deserialize it.
             store: Store = self.serializer.deserialize_store(serialized_state)
-        else:  # If state does not exists we can't execute these methods, so we return a KeyNotFound reply.
+        else:  # If state does not exists we return a KeyNotFound reply.
+            key = event.fun_address.key
             yield event.copy(
                 event_type=EventType.Reply.KeyNotFound,
                 payload={
-                    "error_message": f"Stateful instance with key={event.fun_address.key} does not exist."
+                    "error_message": f"Stateful instance with key={key} does not exist."
                 },
             )
             return serialized_state
@@ -155,7 +165,8 @@ class StatefulOperator(Operator):
     ) -> Tuple[Event, bytes]:
         """Will 'create' this instance, by verifying if the state exists already.
 
-        1. If state exists, we return an FailedInvocation because we can't construct the same key twice.
+        1. If state exists, we return an FailedInvocation because we can't construct the same key
+            twice.
         2. Otherwise, we unpack the created state from the payload and return it.
             In the outgoing event, we put the key in the payload.
 
@@ -311,6 +322,7 @@ class StatefulOperator(Operator):
         """
         assert len(store.waiting_for) == 1
         wf_addr, wf_event_id = store.waiting_for.get_one()
+        assert isinstance(wf_event_id, str)
         path: List[EventAddressTuple] = event.payload.get("path", [])
         path.append(EventAddressTuple(wf_event_id, cur_addr))
         return event.copy(
@@ -339,6 +351,7 @@ class StatefulOperator(Operator):
             cur_addr = event.fun_address
 
         wf_addr, wf_event_id = store.waiting_for.get_one()
+        assert isinstance(wf_event_id, str)
         path: List[EventAddressTuple] = event.payload.get("path", [])
         for i in range(len(path) - 1, -1, -1):  # traverse backwards
             _, addr = path[i]

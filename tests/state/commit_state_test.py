@@ -215,7 +215,7 @@ class TestCommitState:
         transfer_balance_event1: Event,
         transfer_balance_event_reverse: Event,
     ):
-        stateful_operator.IsolationMode = IsolationType.TwoPhaseCommit
+        stateful_operator.IsolationMode = IsolationType.TWO_PHASE_COMMIT
 
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(user1).transfer_balance_0(...)
@@ -291,7 +291,7 @@ class TestCommitState:
         transfer_balance_event1: Event,
         transfer_balance_event2: Event,
     ):
-        stateful_operator.IsolationMode = IsolationType.Abort
+        stateful_operator.IsolationMode = IsolationType.ABORT
 
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(user1).transfer_balance_0(...)
@@ -356,7 +356,7 @@ class TestCommitState:
         transfer_balance_event1: Event,
         transfer_balance_event_reverse: Event,
     ):
-        stateful_operator.IsolationMode = IsolationType.Abort
+        stateful_operator.IsolationMode = IsolationType.ABORT
 
         ########## Begin 1st transaction ##########
         # INVOKE_SPLIT_FUN User(user1).transfer_balance_0(...)
@@ -418,7 +418,7 @@ class TestCommitState:
         transfer_balance_event1: Event,
         transfer_balance_event_reverse: Event,
     ):
-        stateful_operator.IsolationMode = IsolationType.Queue
+        stateful_operator.IsolationMode = IsolationType.QUEUE
 
         # Set the event id to a value that will always be higher than a
         # generated uuid, because the event with the lowest id will be aborted.
@@ -472,7 +472,7 @@ class TestCommitState:
         user3: "Model",
         transfer_balance_flow: List[EventFlowNode],
     ):
-        stateful_operator.IsolationMode = IsolationType.Queue
+        stateful_operator.IsolationMode = IsolationType.QUEUE
 
         # Create events that will cause deadlock.
         # Transfer balance from user1 -> user2
