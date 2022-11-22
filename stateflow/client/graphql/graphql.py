@@ -6,8 +6,7 @@ from typing import Dict, List, Tuple, Any
 import graphene
 import time
 from fastapi import FastAPI, Depends
-from graphql.execution.executors.asyncio import AsyncioExecutor
-from starlette.graphql import GraphQLApp
+from starlette_graphene3 import GraphQLApp
 
 from stateflow.client.future import StateflowFuture, StateflowFailure, T
 from stateflow.client.stateflow_client import StateflowClient
@@ -119,7 +118,7 @@ class Mutation(graphene.ObjectType):
         exec(self.mutation, globals(), globals())
 
         schema = graphene.Schema(query=Query, mutation=Mutation)
-        self.app.add_route("/", GraphQLApp(schema=schema, executor_class=AsyncioExecutor))
+        self.app.add_route("/", GraphQLApp(schema=schema))
 
     async def send_and_wait_with_future(
         self,
