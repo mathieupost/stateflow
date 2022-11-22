@@ -105,6 +105,10 @@ class StatefulOperator(Operator):
             yield self._handle_invoke_stateful(event, store)
         elif event_type == EventType.Request.UpdateState:
             yield self._handle_update_state(event, store)
+        elif event_type == EventType.Request.PrepareState:
+            yield from self._handle_prepare_state(event, store)
+        elif event_type == EventType.Request.IsPrepared:
+            yield from self._handle_is_prepared(event, store)
         elif event_type == EventType.Request.CommitState:
             yield from self._handle_commit_state(event, store)
         elif event_type == EventType.Request.DeadlockCheck:
@@ -302,6 +306,12 @@ class StatefulOperator(Operator):
         store.update_version(version, updated_state)
         store.commit_version(version.id)
         yield from self._handle_queue(store)
+
+    def _handle_prepare_state(self, event: Event, store: Store) -> Iterator[Event]:
+        raise "TODO"
+
+    def _handle_is_prepared(self, event: Event, store: Store) -> Iterator[Event]:
+        raise "TODO"
 
     def _handle_commit_state(self, event: Event, store: Store) -> Iterator[Event]:
         version = store.get_version_for_event_id(event.event_id)
