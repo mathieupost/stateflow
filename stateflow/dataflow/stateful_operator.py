@@ -528,7 +528,14 @@ class StatefulOperator(Operator):
 
         if node.is_last():
             if IsolationMode.is_2pc():
-                yield from self._generate_prepare_events(store, event)
+                if len(store.waiting_for) > 0:
+                    # If the operator is already prepared to commit another
+                    # transaction we'll queue the current event.
+                    serialized_event = self.serializer.serialize_event(event)
+                    store.queue.append(serialized_event)
+                    return
+                else:
+                    yield from self._generate_prepare_events(store, event)
             else:
                 store.waiting_for = AddressEventSet()
                 # And yield CommitState events for all other involved operators.
