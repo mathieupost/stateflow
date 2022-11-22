@@ -506,6 +506,7 @@ class StatefulOperator(Operator):
             # If the current operator is in the write set, we need to
             # get the version for this event flow.
             version = store.get_version_for_event_id(event.event_id)
+            # TODO check if a newer version is already committed, so we can abort
 
         # Leave a breadcrumb for deadlock detection.
         path: List[EventAddressTuple] = event.payload.get("path", [])
@@ -526,18 +527,22 @@ class StatefulOperator(Operator):
             node = flow_graph.current_node
 
         if node.is_last():
-            store.waiting_for = AddressEventSet()
-            # And yield CommitState events for all other involved operators.
-            yield from self._generate_commit_events(event)
-            # Return result.
-            yield event
-            # Commit if this was the last node in the flow
-            yield from self._commit(store, version, write_set, updated_state)
+            if IsolationMode.is_2pc():
+                yield from self._generate_prepare_events(store, event)
+            else:
+                store.waiting_for = AddressEventSet()
+                # And yield CommitState events for all other involved operators.
+                yield from self._generate_commit_events(event)
+                # Return result.
+                yield event
+                # Commit if this was the last node in the flow
+                yield from self._commit(store, version, write_set, updated_state)
         else:
-            # Set waiting_for to the next operator in the flow.
-            store.waiting_for.add_address(node.fun_addr, event.event_id)
             # Update the version otherwise.
             store.update_version(version, updated_state)
+            if IsolationMode.is_abort() or IsolationMode.is_queue():
+                # Set waiting_for to the next operator in the flow.
+                store.waiting_for.add_address(node.fun_addr, event.event_id)
             # Continue the event flow in the next operator.
             yield event
 
@@ -550,8 +555,26 @@ class StatefulOperator(Operator):
             event = self.serializer.deserialize_event(serialized_event)
             yield from self._handle_event_flow(event, store)
 
+    def _generate_prepare_events(self, store: Store, event: Event) -> Iterator[Event]:
+        write_set: WriteSet = event.payload["write_set"]
+        flow_graph: EventFlowGraph = event.payload["flow"]
+        current_address: FunctionAddress = flow_graph.current_node.fun_addr
+
+        # Prepare all operators in this transaction 
+        for address in write_set.iterate_addresses():
+            if address == current_address:
+                continue
+            # Indicate that the other operator is not yet prepared.
+            store.waiting_for.add_address(address, False)
+            # Send a PREPARE message to the other operator.
+            yield event.copy(
+                fun_address=address,
+                event_type=EventType.Request.PrepareState,
+                payload={"write_set": write_set},
+            )
+
     def _generate_commit_events(self, event: Event) -> Iterator[Event]:
-        write_set = event.payload["write_set"]
+        write_set: WriteSet = event.payload["write_set"]
         flow_graph: EventFlowGraph = event.payload["flow"]
         current_address: FunctionAddress = flow_graph.current_node.fun_addr
 
