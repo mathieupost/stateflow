@@ -3,22 +3,18 @@ import uuid
 from typing import List
 
 import pytest
+
 from stateflow.dataflow import stateful_operator
 from stateflow.dataflow.address import FunctionAddress, FunctionType
 from stateflow.dataflow.args import Arguments
-from stateflow.dataflow.dataflow import Dataflow, EgressRouter, IngressRouter, Operator
+from stateflow.dataflow.dataflow import (Dataflow, EgressRouter, IngressRouter,
+                                         Operator)
 from stateflow.dataflow.event import Event, EventType
-from stateflow.dataflow.event_flow import (
-    EventFlowGraph,
-    EventFlowNode,
-    InternalClassRef,
-    InvokeSplitFun,
-)
+from stateflow.dataflow.event_flow import (EventFlowGraph, EventFlowNode,
+                                           InternalClassRef, InvokeSplitFun)
 from stateflow.dataflow.state import EventAddressTuple, Store, WriteSet
-from stateflow.dataflow.stateful_operator import (
-    IsolationType,
-    StatefulOperator,
-)
+from stateflow.dataflow.stateful_operator import (IsolationType,
+                                                  StatefulOperator)
 from stateflow.descriptors.class_descriptor import ClassDescriptor
 from stateflow.serialization.json_serde import JsonSerializer
 from tests.common.common_classes import stateflow
