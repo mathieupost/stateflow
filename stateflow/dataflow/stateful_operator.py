@@ -488,8 +488,7 @@ class StatefulOperator(Operator):
                 # If there is an unfinished transaction, we can't continue
                 # because the other transaction should finish first. We'll add
                 # the event to the queue and check if we are in a deadlock.
-                serialized_event = self.serializer.serialize_event(event)
-                store.queue.append(serialized_event)
+                self._queue_event(event, store)
                 if "path" in event.payload:
                     # Only if we have started the transaction in a previous
                     # operator, we need to check if we are in a deadlock.
@@ -531,8 +530,7 @@ class StatefulOperator(Operator):
                 if len(store.waiting_for) > 0:
                     # If the operator is already prepared to commit another
                     # transaction we'll queue the current event.
-                    serialized_event = self.serializer.serialize_event(event)
-                    store.queue.append(serialized_event)
+                    self._queue_event(event, store)
                     return
                 else:
                     yield from self._generate_prepare_events(store, event)
@@ -554,6 +552,10 @@ class StatefulOperator(Operator):
             yield event
 
         return
+
+    def _queue_event(self, event: Event, store: Store):
+        serialized_event = self.serializer.serialize_event(event)
+        store.queue.append(serialized_event)
 
     def _handle_queue(self, store: Store) -> Iterator[Event]:
         if len(store.queue) > 0:
