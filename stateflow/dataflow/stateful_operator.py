@@ -514,20 +514,19 @@ class StatefulOperator(Operator):
         event.payload["path"] = path
 
         # Initial node
-        node, is_last = flow_graph.current_node, False
+        node = flow_graph.current_node
         # Initial step parameters
         instance, updated_state = None, version.state
         # Keep stepping through the flow as long as the next node should be
         # executed in the current operator.
-        while node.fun_addr == current_address and not is_last:
+        while node.fun_addr == current_address and not node.is_last():
             updated_state, instance = flow_graph.step(
                 self.class_wrapper, updated_state, instance
             )
             # Update the next node.
             node = flow_graph.current_node
-            is_last = isinstance(node, ReturnNode) and node.is_last()
 
-        if is_last:
+        if node.is_last():
             store.waiting_for = AddressEventSet()
             # And yield CommitState events for all other involved operators.
             yield from self._generate_commit_events(event)

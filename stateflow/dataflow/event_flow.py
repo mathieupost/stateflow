@@ -184,6 +184,9 @@ class EventFlowNode:
 
         return output
 
+    def is_last(self) -> bool:
+        return False
+
     def step(
         self, event_flow: "EventFlowGraph", state: State, instance: Any = None
     ) -> Tuple["EventFlowNode", State, Any]:
