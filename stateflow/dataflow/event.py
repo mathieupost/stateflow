@@ -17,6 +17,7 @@ class _Request(Enum):
 
     Prepare = "Prepare"
     VoteYes = "VoteYes"
+    VoteNo = "VoteNo"
     Commit = "Commit"
 
     EventFlow = "EventFlow"

@@ -111,6 +111,7 @@ class EgressRouter:
         elif (
             event.event_type == EventType.Request.Prepare
             or event.event_type == EventType.Request.VoteYes
+            or event.event_type == EventType.Request.VoteNo
             or event.event_type == EventType.Request.Commit
             or event.event_type == EventType.Request.DeadlockCheck
         ):

@@ -108,6 +108,8 @@ class StatefulOperator(Operator):
             yield from self._handle_prepare(event, store)
         elif event_type == EventType.Request.VoteYes:
             yield from self._handle_vote_yes(event, store)
+        elif event_type == EventType.Request.VoteNo:
+            yield from self._handle_vote_no(event, store)
         elif event_type == EventType.Request.Commit:
             yield from self._handle_commit(event, store)
         elif event_type == EventType.Request.DeadlockCheck:
@@ -310,6 +312,9 @@ class StatefulOperator(Operator):
         raise "TODO"
 
     def _handle_vote_yes(self, event: Event, store: Store) -> Iterator[Event]:
+        raise "TODO"
+
+    def _handle_vote_no(self, event: Event, store: Store) -> Iterator[Event]:
         raise "TODO"
 
     def _handle_commit(self, event: Event, store: Store) -> Iterator[Event]:
