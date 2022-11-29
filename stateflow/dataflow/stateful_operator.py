@@ -104,12 +104,12 @@ class StatefulOperator(Operator):
             yield self._handle_invoke_stateful(event, store)
         elif event_type == EventType.Request.UpdateState:
             yield self._handle_update_state(event, store)
-        elif event_type == EventType.Request.PrepareState:
-            yield from self._handle_prepare_state(event, store)
-        elif event_type == EventType.Request.IsPrepared:
-            yield from self._handle_is_prepared(event, store)
-        elif event_type == EventType.Request.CommitState:
-            yield from self._handle_commit_state(event, store)
+        elif event_type == EventType.Request.Prepare:
+            yield from self._handle_prepare(event, store)
+        elif event_type == EventType.Request.VoteYes:
+            yield from self._handle_vote_yes(event, store)
+        elif event_type == EventType.Request.Commit:
+            yield from self._handle_commit(event, store)
         elif event_type == EventType.Request.DeadlockCheck:
             yield from self._handle_deadlock_check(event, store)
         elif event_type == EventType.Request.EventFlow:
@@ -306,13 +306,13 @@ class StatefulOperator(Operator):
         store.commit_version(version.id)
         yield from self._handle_queue(store)
 
-    def _handle_prepare_state(self, event: Event, store: Store) -> Iterator[Event]:
+    def _handle_prepare(self, event: Event, store: Store) -> Iterator[Event]:
         raise "TODO"
 
-    def _handle_is_prepared(self, event: Event, store: Store) -> Iterator[Event]:
+    def _handle_vote_yes(self, event: Event, store: Store) -> Iterator[Event]:
         raise "TODO"
 
-    def _handle_commit_state(self, event: Event, store: Store) -> Iterator[Event]:
+    def _handle_commit(self, event: Event, store: Store) -> Iterator[Event]:
         version = store.get_version_for_event_id(event.event_id)
         if version.parent_id < store.last_committed_version_id:
             print("New version is committed before this commit was handled!")
@@ -536,7 +536,7 @@ class StatefulOperator(Operator):
                     yield from self._generate_prepare_events(store, event)
             else:
                 store.waiting_for = AddressEventSet()
-                # And yield CommitState events for all other involved operators.
+                # And yield Commit events for all other involved operators.
                 yield from self._generate_commit_events(event)
                 # Return result.
                 yield event
@@ -578,7 +578,7 @@ class StatefulOperator(Operator):
             # Send a PREPARE message to the other operator.
             yield event.copy(
                 fun_address=address,
-                event_type=EventType.Request.PrepareState,
+                event_type=EventType.Request.Prepare,
                 payload={"write_set": write_set},
             )
 
@@ -592,7 +592,7 @@ class StatefulOperator(Operator):
                 continue
             yield event.copy(
                 fun_address=address,
-                event_type=EventType.Request.CommitState,
+                event_type=EventType.Request.Commit,
                 payload={"write_set": write_set},
             )
 

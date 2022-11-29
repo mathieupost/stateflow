@@ -112,7 +112,7 @@ class TestCommitState:
         events = self.step(user1, events[0])
         assert len(events) == 2
         # COMMIT_STATE User(user2)
-        assert events[0].event_type == EventType.Request.CommitState
+        assert events[0].event_type == EventType.Request.Commit
         assert events[0].payload["write_set"] == expected_write_set_2
         assert events[1].event_type == EventType.Reply.SuccessfulInvocation
         assert events[1].payload["return_results"] == [True]
@@ -200,7 +200,7 @@ class TestCommitState:
 
         # COMMIT_STATE User(user2)
         _ = self.step(user2, tr1_events[0])
-        # Check if the CommitState event did NOT overwrite the committed version.
+        # Check if the Commit event did NOT overwrite the committed version.
         assert user2.store.last_committed_version_id == 2
         ########## End 1st transaction ##########
 
@@ -276,7 +276,7 @@ class TestCommitState:
 
         # COMMIT_STATE User(user2)
         _ = self.step(user2, tr1_events[0])
-        # Check if the CommitState event did NOT overwrite the committed version.
+        # Check if the Commit event did NOT overwrite the committed version.
         assert user2.store.last_committed_version_id == 2
         ########## End 1st transaction ##########
 
@@ -554,7 +554,7 @@ class TestCommitState:
         # Commit t3 in user1.
         assert t3_events[0].event_id == t3_id
         t3_commit_user1 = t3_events[0]
-        assert t3_commit_user1.event_type == EventType.Request.CommitState
+        assert t3_commit_user1.event_type == EventType.Request.Commit
         assert t3_commit_user1.fun_address == user1.fun_addr
         # Return t3 result to client.
         assert t3_events[1].event_id == t3_id
@@ -597,7 +597,7 @@ class TestCommitState:
         # Commit t2 in user3.
         assert t2_events[0].event_id == t2_id
         t2_commit_user3 = t2_events[0]
-        assert t2_commit_user3.event_type == EventType.Request.CommitState
+        assert t2_commit_user3.event_type == EventType.Request.Commit
         assert t2_commit_user3.fun_address == user3.fun_addr
         # Return t2 result to client.
         assert t2_events[1].event_id == t2_id
@@ -633,7 +633,7 @@ class TestCommitState:
         # Commit t1 in user2.
         assert t1_events[0].event_id == t1_id
         t1_commit_user2 = t1_events[0]
-        assert t1_commit_user2.event_type == EventType.Request.CommitState
+        assert t1_commit_user2.event_type == EventType.Request.Commit
         assert t1_commit_user2.fun_address == user2.fun_addr
         # Return t1 result to client.
         assert t1_events[1].event_id == t1_id

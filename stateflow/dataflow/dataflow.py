@@ -109,9 +109,9 @@ class EgressRouter:
         if event.event_type == EventType.Request.EventFlow:
             route = self._route_event_flow(event)
         elif (
-            event.event_type == EventType.Request.PrepareState
-            or event.event_type == EventType.Request.IsPrepared
-            or event.event_type == EventType.Request.CommitState
+            event.event_type == EventType.Request.Prepare
+            or event.event_type == EventType.Request.VoteYes
+            or event.event_type == EventType.Request.Commit
             or event.event_type == EventType.Request.DeadlockCheck
         ):
             event_id = event.event_id

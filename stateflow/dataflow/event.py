@@ -14,9 +14,10 @@ class _Request(Enum):
     SetState = "SetState"
     UpdateState = "UpdateState"
     DeleteState = "DeleteState"
-    PrepareState = "PrepareState"
-    IsPrepared = "IsPrepared"
-    CommitState = "CommitState"
+
+    Prepare = "Prepare"
+    VoteYes = "VoteYes"
+    Commit = "Commit"
 
     EventFlow = "EventFlow"
     DeadlockCheck = "DeadlockCheck"
