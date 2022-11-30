@@ -303,8 +303,7 @@ class StatefulOperator(Operator):
         write_set: WriteSet,
         updated_state: Optional[State] = None,
     ) -> Iterator[Event]:
-        version.set_write_set(write_set)
-        store.update_version(version, updated_state)
+        store.update_version(version, updated_state, write_set)
         store.commit_version(version.id)
         yield from self._handle_queue(store)
 

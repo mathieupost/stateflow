@@ -216,7 +216,7 @@ class Store:
 
         return version
 
-    def update_version(self, version: Version, updated_state: Optional[State] = None):
+    def update_version(self, version: Version, updated_state: Optional[State] = None, write_set: Optional[WriteSet] = None):
         """Encodes and sets the given version.
 
         :param id: the id of the version to set.
@@ -224,6 +224,8 @@ class Store:
         """
         if updated_state:
             version.set_state(updated_state)
+        if write_set:
+            version.set_write_set(write_set)
         encoded_version: bytes = jsonpickle.encode(version)
         self.encoded_versions[version.id] = encoded_version
 
