@@ -355,7 +355,16 @@ class StatefulOperator(Operator):
             yield from self._handle_queue(store)
 
     def _handle_vote_no(self, event: Event, store: Store) -> Iterator[Event]:
-        raise "TODO"
+        version = store.get_version_for_event_id(event.event_id)
+        store.delete_version_for_event_id(event.event_id)
+        store.waiting_for = AddressEventSet()
+
+        # abort all
+        for address in version.write_set.iterate_addresses():
+            if address == event.fun_address:
+                continue
+            yield Event(event.event_id, address, EventType.Request.Abort, None)
+        yield from self._handle_queue(store)
 
     def _handle_commit(self, event: Event, store: Store) -> Iterator[Event]:
         if IsolationMode.is_2pc():
