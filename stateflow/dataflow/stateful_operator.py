@@ -19,9 +19,13 @@ NoType = NewType("NoType", None)
 
 class IsolationType(Enum):
     """Enum to different IsolationMode."""
-    ABORT = "Abort"  # Abort the current transaction if an operator is in an unfinished transaction.
-    QUEUE = "Queue"  # Queue the current transaction if an operator is in an unfinished transaction.
-    TWO_PHASE_COMMIT = "2PC"  # Use two phase commit to commit transactions.
+
+    # Abort the current transaction if an operator is in an unfinished transaction.
+    ABORT = "Abort"
+    # Queue the current transaction if an operator is in an unfinished transaction.
+    QUEUE = "Queue"
+    # Use two phase commit to commit transactions.
+    TWO_PHASE_COMMIT = "2PC"
 
     def is_abort(self) -> bool:
         """Helper function to check if the IsolationType is ABORT."""
@@ -250,7 +254,8 @@ class StatefulOperator(Operator):
         if version.id - version.parent_id > 1:
             raise AbortException()
 
-        version.state[event.payload["attribute"]] = event.payload["attribute_value"]
+        version.state[event.payload["attribute"]
+                      ] = event.payload["attribute_value"]
         return_event = event.copy(
             event_type=EventType.Reply.SuccessfulStateRequest,
             payload={},
@@ -310,7 +315,8 @@ class StatefulOperator(Operator):
     def _handle_prepare(self, event: Event, store: Store) -> Iterator[Event]:
         transaction_operator: FunctionAddress = event.payload["transaction_operator"]
 
-        version = store.get_version_if_not_outdated_for_event_id(event.event_id)
+        version = store.get_version_if_not_outdated_for_event_id(
+            event.event_id)
         if version == None:
             yield event.copy(
                 event_type=EventType.Request.VoteNo,
@@ -453,10 +459,12 @@ class StatefulOperator(Operator):
         flow_graph: EventFlowGraph = event.payload["flow"]
         current_address: FunctionAddress = flow_graph.current_node.fun_addr
         write_set: WriteSet = event.payload.get("write_set", WriteSet())
-        last_write_set: WriteSet = event.payload.get("last_write_set", WriteSet())
+        last_write_set: WriteSet = event.payload.get(
+            "last_write_set", WriteSet())
 
         # - create a new version
-        version = store.create_version_for_event_id(event.event_id, min_parent_id)
+        version = store.create_version_for_event_id(
+            event.event_id, min_parent_id)
         # - add it to the write_set
         write_set.add_address(current_address, version.id)
         last_write_set.add_address(current_address, version.parent_id)
@@ -464,7 +472,8 @@ class StatefulOperator(Operator):
         event.payload["write_set"] = write_set
         # - check if parent_write_set has newer versions of operators
         #   that are in the write_set and last_write_set.
-        parent_write_set = store.get_version(version.parent_id).write_set or WriteSet()
+        parent_write_set = store.get_version(
+            version.parent_id).write_set or WriteSet()
         # - loop over all addresses in the write_set to check if they
         #   are consistent with the parent_write_set.
         is_consistent = True
@@ -496,7 +505,8 @@ class StatefulOperator(Operator):
         current_address: FunctionAddress = flow_graph.current_node.fun_addr
 
         write_set: WriteSet = event.payload.get("write_set", WriteSet())
-        last_write_set: WriteSet = event.payload.get("last_write_set", WriteSet())
+        last_write_set: WriteSet = event.payload.get(
+            "last_write_set", WriteSet())
         if not write_set.address_exists(current_address):
             # If the current operator is not in the write_set, it is not used in
             # the current attempt to execute the event flow and we need to:
@@ -522,7 +532,8 @@ class StatefulOperator(Operator):
                     yield from self._handle_deadlock_check(event, store)
                 return
             # - create a new version
-            version, is_consistent = self._create_version(event, store, min_parent_id)
+            version, is_consistent = self._create_version(
+                event, store, min_parent_id)
             # - if the version is inconsistent with previous operator
             #   versions, we need to restart the flow.
             if not is_consistent:
@@ -597,7 +608,7 @@ class StatefulOperator(Operator):
         flow_graph: EventFlowGraph = event.payload["flow"]
         current_address: FunctionAddress = flow_graph.current_node.fun_addr
 
-        # Prepare all operators in this transaction 
+        # Prepare all operators in this transaction
         for address in write_set.iterate_addresses():
             if address == current_address:
                 continue
