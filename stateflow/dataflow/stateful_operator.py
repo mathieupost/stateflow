@@ -308,7 +308,30 @@ class StatefulOperator(Operator):
         yield from self._handle_queue(store)
 
     def _handle_prepare(self, event: Event, store: Store) -> Iterator[Event]:
-        raise "TODO"
+        transaction_operator: FunctionAddress = event.payload["transaction_operator"]
+
+        version = store.get_version_if_not_outdated_for_event_id(event.event_id)
+        if version == False:
+            yield event.copy(
+                event_type=EventType.Request.VoteNo,
+                fun_address=transaction_operator,
+                payload={"address": event.fun_address},
+            )
+            store.delete_version_for_event_id(event.event_id)
+            return
+
+        if len(store.waiting_for) > 0:
+            self._queue_event(event, store)
+            return
+
+        write_set: WriteSet = event.payload["write_set"]
+        store.update_version(version, write_set=write_set)
+        store.waiting_for.add_address(transaction_operator, event.event_id)
+        yield event.copy(
+            event_type=EventType.Request.VoteYes,
+            fun_address=transaction_operator,
+            payload={"address": event.fun_address},
+        )
 
     def _handle_vote_yes(self, event: Event, store: Store) -> Iterator[Event]:
         raise "TODO"
@@ -537,6 +560,7 @@ class StatefulOperator(Operator):
                     self._queue_event(event, store)
                     return
                 else:
+                    store.update_version(version, updated_state, write_set)
                     yield from self._generate_prepare_events(store, event)
             else:
                 store.waiting_for = AddressEventSet()
@@ -583,7 +607,10 @@ class StatefulOperator(Operator):
             yield event.copy(
                 fun_address=address,
                 event_type=EventType.Request.Prepare,
-                payload={"write_set": write_set},
+                payload={
+                    "transaction_operator": current_address,
+                    "write_set": write_set,
+                },
             )
 
     def _generate_commit_events(self, event: Event) -> Iterator[Event]:
