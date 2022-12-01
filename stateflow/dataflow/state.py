@@ -292,6 +292,32 @@ class Store:
         if version_id > self.last_committed_version_id:
             self.last_committed_version_id = version_id
 
+    def get_version_if_not_outdated(self, version_id: int) -> Optional[Version]:
+        # Decode the version to check if the last committed version is newer
+        # than the parent/base version from which this snapshot version was
+        # created.
+        version = self.get_version(version_id)
+        is_newer_than_parent = self.last_committed_version_id > version.parent_id
+        if is_newer_than_parent:
+            return None
+
+        return version
+
+    def get_version_if_not_outdated_for_event_id(self, event_id: str) -> Optional[Version]:
+        """Checks if a new version is committed since creating the version for
+        this event_id.
+
+        :param event_id: _description_
+        :return: _description_
+        """
+        # Cheap check without decoding the version for cases where the last
+        # committed version is created after this version was created.
+        version_id = self.event_version_map[event_id]
+        is_newer_than_current = self.last_committed_version_id > version_id
+        if is_newer_than_current:
+            return None
+
+        return self.get_version_if_not_outdated(version_id)
 
 class StateDescriptor:
     def __init__(self, state_desc: Dict[str, Any]):
