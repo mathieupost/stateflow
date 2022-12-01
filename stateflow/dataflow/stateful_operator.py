@@ -379,7 +379,8 @@ class StatefulOperator(Operator):
             yield from self._commit(store, version, write_set)
 
     def _handle_abort(self, event: Event, store: Store) -> Iterator[Event]:
-        raise "TODO"
+        store.delete_version_for_event_id(event.event_id)
+        store.waiting_for = AddressEventSet()
 
     def _create_deadlock_check_event(
         self, cur_addr: FunctionAddress, event: Event, store: Store
