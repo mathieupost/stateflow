@@ -340,7 +340,17 @@ class StatefulOperator(Operator):
         )
 
     def _handle_vote_yes(self, event: Event, store: Store) -> Iterator[Event]:
-        raise "TODO"
+        from_operator: FunctionAddress = event.payload["address"]
+        store.waiting_for.remove_address(from_operator)
+
+        if len(store.waiting_for) == 0:
+            version = store.get_version_for_event_id(event.event_id)
+            store.commit_version(version.id)
+            for address in version.write_set.iterate_addresses():
+                if address == event.fun_address:
+                    continue
+                yield Event(event.event_id, address, EventType.Request.Commit, None)
+            yield from self._handle_queue(store)
 
     def _handle_vote_no(self, event: Event, store: Store) -> Iterator[Event]:
         raise "TODO"
