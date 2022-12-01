@@ -113,6 +113,7 @@ class EgressRouter:
             or event.event_type == EventType.Request.VoteYes
             or event.event_type == EventType.Request.VoteNo
             or event.event_type == EventType.Request.Commit
+            or event.event_type == EventType.Request.Abort
             or event.event_type == EventType.Request.DeadlockCheck
         ):
             event_id = event.event_id

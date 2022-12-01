@@ -19,6 +19,7 @@ class _Request(Enum):
     VoteYes = "VoteYes"
     VoteNo = "VoteNo"
     Commit = "Commit"
+    Abort = "Abort"
 
     EventFlow = "EventFlow"
     DeadlockCheck = "DeadlockCheck"

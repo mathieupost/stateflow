@@ -116,6 +116,8 @@ class StatefulOperator(Operator):
             yield from self._handle_vote_no(event, store)
         elif event_type == EventType.Request.Commit:
             yield from self._handle_commit(event, store)
+        elif event_type == EventType.Request.Abort:
+            yield from self._handle_abort(event, store)
         elif event_type == EventType.Request.DeadlockCheck:
             yield from self._handle_deadlock_check(event, store)
         elif event_type == EventType.Request.EventFlow:
@@ -361,6 +363,9 @@ class StatefulOperator(Operator):
             print("New version is committed before this commit was handled!")
         write_set = event.payload["write_set"]
         yield from self._commit(store, version, write_set)
+
+    def _handle_abort(self, event: Event, store: Store) -> Iterator[Event]:
+        raise "TODO"
 
     def _create_deadlock_check_event(
         self, cur_addr: FunctionAddress, event: Event, store: Store
