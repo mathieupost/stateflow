@@ -649,6 +649,68 @@ class TestCommitState:
 
         ########## EventBus = [] ##########
 
+    def test__2pc_isolation__transfer_same(
+        self,
+        user1: "Model",
+        user2: "Model",
+        transfer_balance_event1: Event,
+        transfer_balance_event2: Event,
+    ):
+        stateful_operator.IsolationMode = IsolationType.TWO_PHASE_COMMIT
+
+        # Set the event id to a value that will always be higher than a
+        # generated uuid, because the event with the lowest id will be aborted.
+        tr1_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        transfer_balance_event1.event_id = tr1_id
+
+        ########## Begin 1st transaction ##########
+        # INVOKE_SPLIT_FUN User(user1).transfer_balance_0(...)
+        tr1_events = self.step(user1, transfer_balance_event1)
+
+        # INVOKE_EXTERNAL User(user2).update_balance(...)
+        tr1_events = self.step(user2, tr1_events[0])
+
+        if True:  # indented for readability
+            ########## Begin 2nd transaction ##########
+            tr2_id = transfer_balance_event2.event_id
+
+            # INVOKE_SPLIT_FUN User(user1).transfer_balance_0(...)
+            tr2_events = self.step(user1, transfer_balance_event2)
+
+            # INVOKE_EXTERNAL User(user2).update_balance(...)
+            tr2_events = self.step(user2, tr2_events[0])
+
+        ########## Resume 1st transaction ##########
+        # INVOKE_SPLIT_FUN User(user1).transfer_balance_7(...)
+        tr1_events = self.step(user1, tr1_events[0])
+        # User(user1) is prepared now, and
+        # waiting for User(user2) to be prepared.
+        assert user1.store.waiting_for.get_one() == (user2.fun_addr, False)
+        assert len(tr1_events) == 1
+        # Send PREPARE to user2
+        assert tr1_events[0].event_type == EventType.Request.Prepare
+        assert tr1_events[0].fun_address == user2.fun_addr
+
+        if True:
+            ########## Resume 2nd transaction ##########
+            # INVOKE_SPLIT_FUN User(user1).transfer_balance_7(...)
+            tr2_events = self.step(user1, tr2_events[0])
+            # PREPARE User(user1) is queued.
+            assert len(user1.store.queue) == 1
+            assert len(tr2_events) == 0
+
+        # PREPARE User(user2)
+        _ = self.step(user2, tr1_events[0])
+        # User(user1) is prepared now.
+        assert user2.store.waiting_for.get_one() == (user1.fun_addr, tr1_id)
+        ########## End 1st transaction ##########
+
+        if True:
+            # COMMIT_STATE User(user2)
+            _ = self.step(user2, tr2_events[0])
+            assert user2.store.last_committed_version_id == 2
+            ########## End 2nd transaction ##########
+
 
 @pytest.fixture(scope="class")
 def flow() -> Dataflow:

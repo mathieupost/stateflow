@@ -334,10 +334,16 @@ class StatefulOperator(Operator):
         )
 
     def _handle_vote_yes(self, event: Event, store: Store) -> Iterator[Event]:
-        raise "TODO"
+        from_operator: FunctionAddress = event.payload["address"]
+        store.waiting_for.remove_address(from_operator)
+
+        if len(store.waiting_for) == 0:
+            # commit all
+            pass
 
     def _handle_vote_no(self, event: Event, store: Store) -> Iterator[Event]:
-        raise "TODO"
+        store.delete_version_for_event_id(event.event_id)
+        # abort all
 
     def _handle_commit(self, event: Event, store: Store) -> Iterator[Event]:
         version = store.get_version_for_event_id(event.event_id)
@@ -618,13 +624,16 @@ class StatefulOperator(Operator):
         flow_graph: EventFlowGraph = event.payload["flow"]
         current_address: FunctionAddress = flow_graph.current_node.fun_addr
 
+        if write_set:
+            payload = {"write_set": write_set}
+
         for address in write_set.iterate_addresses():
             if address == current_address:
                 continue
             yield event.copy(
                 fun_address=address,
                 event_type=EventType.Request.Commit,
-                payload={"write_set": write_set},
+                payload=payload,
             )
 
 
