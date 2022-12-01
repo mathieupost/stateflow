@@ -96,6 +96,26 @@ class AddressSet(Dict[str, Dict[str, Dict[str, T]]]):
         key = address.key or ""
         return self.get(namespace, operator, key)
 
+    def remove(self, namespace: str, operator: str, key: str) -> T:
+        if self.exists(namespace, operator, key):
+            res = self[namespace][operator].pop(key)
+
+            # Cleanup
+            if len(self[namespace][operator]) == 0:
+                self[namespace].pop(operator)
+                if len(self[namespace]) == 0:
+                    self.pop(namespace)
+            
+            # Return popped item
+            return res
+        return -1
+    
+    def remove_address(self, address: FunctionAddress) -> T:
+        namespace = address.function_type.namespace
+        operator = address.function_type.name
+        key = address.key or ""
+        return self.remove(namespace, operator, key)
+
     def get_one(self) -> Tuple[FunctionAddress, T]:
         for namespace, operator, key, value in self.iterate():
             ft = FunctionType(namespace, operator, True)
