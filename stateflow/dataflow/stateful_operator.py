@@ -358,11 +358,16 @@ class StatefulOperator(Operator):
         raise "TODO"
 
     def _handle_commit(self, event: Event, store: Store) -> Iterator[Event]:
-        version = store.get_version_for_event_id(event.event_id)
-        if version.parent_id < store.last_committed_version_id:
-            print("New version is committed before this commit was handled!")
-        write_set = event.payload["write_set"]
-        yield from self._commit(store, version, write_set)
+        if IsolationMode.is_2pc():
+            version_id = store.event_version_map[event.event_id]
+            store.commit_version(version_id)
+            yield from self._handle_queue(store)
+        else:
+            version = store.get_version_for_event_id(event.event_id)
+            if version.parent_id < store.last_committed_version_id:
+                print("New version is committed before this commit was handled!")
+            write_set = event.payload["write_set"]
+            yield from self._commit(store, version, write_set)
 
     def _handle_abort(self, event: Event, store: Store) -> Iterator[Event]:
         raise "TODO"
