@@ -4,7 +4,7 @@ from typing import Iterator, List, NewType, Optional, Tuple
 from stateflow.dataflow.address import FunctionAddress
 from stateflow.dataflow.dataflow import Edge, EventType, FunctionType, Operator
 from stateflow.dataflow.event import Event
-from stateflow.dataflow.event_flow import EventFlowGraph, ReturnNode
+from stateflow.dataflow.event_flow import EventFlowGraph
 from stateflow.dataflow.state import (AddressEventSet, EventAddressTuple,
                                       State, Store, Version, WriteSet)
 from stateflow.serialization.pickle_serializer import PickleSerializer, SerDe

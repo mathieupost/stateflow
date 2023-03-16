@@ -120,7 +120,7 @@ class AWSLambdaRuntime(LambdaBase, Runtime):
 
         if event.event_type == EventType.Request.InitClass and route.key is None:
             new_event = operator.handle_create(event)
-            return self.invoke_operator(
+            yield from self.invoke_operator(
                 Route(
                     RouteDirection.INTERNAL,
                     operator_name,
@@ -140,14 +140,17 @@ class AWSLambdaRuntime(LambdaBase, Runtime):
 
             operator_state = self.get_state(full_key)
 
-            return_event, updated_state = operator.handle(event, operator_state)
+            handler = operator.handle(event, operator_state)
+            updated_state = handler.return_value
 
             if updated_state is not operator_state:
                 self.save_state(full_key, updated_state)
 
             if lock:
                 lock.release()
-            return return_event
+
+            for event in handler:
+                yield event
 
     def handle_invocation(self, event: Event) -> Route:
         route: Route = self.ingress_router.route(event)
@@ -158,6 +161,17 @@ class AWSLambdaRuntime(LambdaBase, Runtime):
             return self.egress_router.route_and_serialize(route.value)
         else:
             return route
+
+    def _handle(self, event_body):
+        event = base64.b64decode(event_body)
+
+        parsed_event: Event = self.ingress_router.parse(event)
+        return_route: Route = self.handle_invocation(parsed_event)
+
+        while return_route.direction != RouteDirection.CLIENT:
+            return_route = self.handle_invocation(return_route.value)
+
+        return self.egress_router.serialize(return_route.value)
 
     def handle(self, event, context):
         raise NotImplementedError("Needs to be implemented by subclasses.")

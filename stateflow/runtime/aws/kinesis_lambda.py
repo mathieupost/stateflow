@@ -33,15 +33,9 @@ class AWSKinesisLambdaRuntime(AWSLambdaRuntime):
 
     def handle(self, event, context):
         for record in event["Records"]:
-            event = base64.b64decode(record["kinesis"]["data"])
+            event_body = record["kinesis"]["data"]
+            serialized_event = self._handle(event_body)
 
-            parsed_event: Event = self.ingress_router.parse(event)
-            return_route: Route = self.handle_invocation(parsed_event)
-
-            while return_route.direction != RouteDirection.CLIENT:
-                return_route = self.handle_invocation(return_route.value)
-
-            serialized_event = self.egress_router.serialize(return_route.value)
             self.kinesis.put_record(
                 StreamName=self.reply_stream,
                 Data=serialized_event,

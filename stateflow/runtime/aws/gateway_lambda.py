@@ -27,23 +27,13 @@ class AWSGatewayLambdaRuntime(AWSLambdaRuntime):
 
     def handle(self, event, context):
         if self.gateway:
-            event_body = json.loads(event["body"])
-            event_encoded = event_body["event"]
-            event_serialized = base64.b64decode(event_encoded)
-        else:
-            event_body = event["event"]
-            event_serialized = base64.b64decode(event_body)
+            event = json.loads(event["body"])
 
-        parsed_event: Event = self.ingress_router.parse(event_serialized)
-        return_route: Route = self.handle_invocation(parsed_event)
-
-        while return_route.direction != RouteDirection.CLIENT:
-            return_route = self.handle_invocation(return_route.value)
-
-        return_event_serialized = self.egress_router.serialize(return_route.value)
-        return_event_encoded = base64.b64encode(return_event_serialized)
+        event_body = event["event"]
+        serialized_event = self._handle(event_body)
+        encoded_event = base64.b64encode(serialized_event)
 
         return {
             "statusCode": 200,
-            "body": json.dumps({"event": return_event_encoded.decode()}),
+            "body": json.dumps({"event": encoded_event.decode()}),
         }
