@@ -20,6 +20,10 @@ class Arguments:
     def get_keys(self) -> List[str]:
         return list(self._args.keys())
 
+    def toDict(self):
+        """For custom ujson serialization"""
+        return self.to_dict()
+
     def to_dict(self) -> Dict:
         return self._args
 
