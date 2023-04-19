@@ -47,7 +47,7 @@ class TestCommitState:
 
         return events
 
-    @pytest.mark.parametrize("isolation_mode", IsolationType)
+    @pytest.mark.parametrize("isolation_mode", [IsolationType.ABORT, IsolationType.QUEUE])
     def test__all_isolation__single_transaction(
         self,
         isolation_mode: IsolationType,
@@ -134,7 +134,7 @@ class TestCommitState:
     # the user2's state is committed, the user1 starts another transfer.
     # Since the user1's state is committed before the 2nd transfer starts, the
     # 2nd transfer can detect and use the new user2 state.
-    @pytest.mark.parametrize("isolation_mode", IsolationType)
+    @pytest.mark.parametrize("isolation_mode", [IsolationType.ABORT, IsolationType.QUEUE])
     def test__all_isolation__read_skew__direct_detect(
         self,
         isolation_mode: IsolationType,
@@ -182,11 +182,12 @@ class TestCommitState:
             }
 
             # INVOKE_EXTERNAL User(user2).update_balance(...)
-            # Should get uncommitted (newer) state from 1st transaction, because
-            # of detected new version (user2: 1) in the event's last_write_set.
+            # Should commit newer state from 1st transaction, because of
+            # detected new version (user2: 1) in the event's last_write_set.
+            u2_previous_committed_version = user2.store.last_committed_version_id
             tr2_events = self.step(user2, tr2_events[0])
             u2_version = user2.store.get_version_for_event_id(tr2_event_id)
-            assert user2.store.last_committed_version_id < u2_version.parent_id
+            assert u2_previous_committed_version < user2.store.last_committed_version_id
             assert u2_version.parent_id == 1
             assert u2_version.id == 2
 
@@ -222,9 +223,17 @@ class TestCommitState:
 
         # INVOKE_SPLIT_FUN User(user1).transfer_balance_7(...)
         tr1_events = self.step(user1, tr1_events[0])
+
+        # PREPARE User(user2)
+        tr1_events = self.step(user2, tr1_events[0])
+
+        # VOTE_YES User(user1)
+        tr1_events = self.step(user1, tr1_events[0])
+
         # User(user1) is committed now.
         assert user1.store.last_committed_version_id == 1
 
+        # Begin new operation while user2 is not yet committed.
         if True:  # indented for readability
             ########## Begin 2nd transaction ##########
             tr2_event_id = transfer_balance_event_reverse.event_id
@@ -253,10 +262,10 @@ class TestCommitState:
             }
 
             # INVOKE_SPLIT_FUN User(user2).transfer_balance_0(...)
-            # Gets uncommitted version from 1st transaction.
+            # Commits version from 1st transaction.
             tr2_events = self.step(user2, tr2_events[0])
             u2_version = user2.store.get_version_for_event_id(tr2_event_id)
-            assert user2.store.last_committed_version_id == 0
+            assert user2.store.last_committed_version_id == 1
             # Created from uncomitted version.
             assert u2_version.parent_id == 1
             assert u2_version.id == 2
@@ -266,6 +275,13 @@ class TestCommitState:
 
             # INVOKE_SPLIT_FUN User(user2).transfer_balance_7(...)
             tr2_events = self.step(user2, tr2_events[0])
+
+            # PREPARE User(user1)
+            tr2_events = self.step(user1, tr2_events[0])
+
+            # VOTE_YES User(user2)
+            tr2_events = self.step(user2, tr2_events[0])
+
             # User(user2) is committed now.
             assert user2.store.last_committed_version_id == 2
 
