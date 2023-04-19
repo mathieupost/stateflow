@@ -311,6 +311,7 @@ class Store:
         If a new version is committed before, nothing happens.
         """
         if version_id > self.last_committed_version_id:
+            del self.encoded_versions[self.last_committed_version_id]
             self.last_committed_version_id = version_id
 
     def get_version_if_not_outdated(self, version_id: int) -> Optional[Version]:
