@@ -303,17 +303,6 @@ class StatefulOperator(Operator):
                 payload={"return_results": invocation.return_results},
             )
 
-    def _commit(
-        self,
-        store: Store,
-        version: Version,
-        write_set: WriteSet,
-        updated_state: Optional[State] = None,
-    ) -> Iterator[Event]:
-        store.update_version(version, updated_state, write_set)
-        store.commit_version(version.id)
-        yield from self._handle_queue(store)
-
     def _handle_prepare(self, event: Event, store: Store) -> Iterator[Event]:
         transaction_operator: FunctionAddress = event.payload["transaction_operator"]
 
@@ -347,12 +336,11 @@ class StatefulOperator(Operator):
 
         if len(store.waiting_for) == 0:
             version = store.get_version_for_event_id(event.event_id)
-            store.commit_version(version.id)
             for address in version.write_set.iterate_addresses():
                 if address == event.fun_address:
                     continue
                 yield Event(event.event_id, address, EventType.Request.Commit, None)
-            yield from self._handle_queue(store)
+            yield from self._commit_version(version.id, store)
 
     def _handle_vote_no(self, event: Event, store: Store) -> Iterator[Event]:
         version = store.get_version_for_event_id(event.event_id)
@@ -366,17 +354,27 @@ class StatefulOperator(Operator):
             yield Event(event.event_id, address, EventType.Request.Abort, None)
         yield from self._handle_queue(store)
 
+    def _commit_version(self, version_id: int, store: Store) -> Iterator[Event]:
+        store.commit_version(version_id)
+        for ns, o, k, event_id in store.waiting_for.iterate():
+            if version_id == store.event_version_map[event_id]:
+                store.waiting_for.remove(ns, o, k)
+                del store.event_version_map[event_id]
+                break
+        yield from self._handle_queue(store)
+
     def _handle_commit(self, event: Event, store: Store) -> Iterator[Event]:
+        if event.event_id not in store.event_version_map:
+            # Already committed and cleaned up.
+            return
         if IsolationMode.is_2pc():
             version_id = store.event_version_map[event.event_id]
-            store.commit_version(version_id)
-            yield from self._handle_queue(store)
+            yield from self._commit_version(version_id, store)
         else:
             version = store.get_version_for_event_id(event.event_id)
-            if version.parent_id < store.last_committed_version_id:
-                print("New version is committed before this commit was handled!")
             write_set = event.payload["write_set"]
-            yield from self._commit(store, version, write_set)
+            store.update_version(version, None, write_set)
+            yield from self._commit_version(version.id, store)
 
     def _handle_abort(self, event: Event, store: Store) -> Iterator[Event]:
         store.delete_version_for_event_id(event.event_id)
@@ -561,6 +559,8 @@ class StatefulOperator(Operator):
                     # operator, we need to check if we are in a deadlock.
                     yield from self._handle_deadlock_check(event, store)
                 return
+            if min_parent_id > store.last_committed_version_id:
+                yield from self._commit_version(min_parent_id, store)
             # - create a new version
             version, is_consistent = self._create_version(
                 event, store, min_parent_id)
@@ -610,7 +610,8 @@ class StatefulOperator(Operator):
                 # Return result.
                 yield event
                 # Commit if this was the last node in the flow
-                yield from self._commit(store, version, write_set, updated_state)
+                store.update_version(version, updated_state, write_set)
+                yield from self._commit_version(version.id, store)
         else:
             # Update the version otherwise.
             store.update_version(version, updated_state)
